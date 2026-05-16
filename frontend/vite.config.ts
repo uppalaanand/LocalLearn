@@ -22,12 +22,14 @@ export default defineConfig(({mode}) => {
       // Proxy API requests to backend server
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          // target: 'http://localhost:5000',
+          target: "https://local-learn-backend.vercel.app",
           changeOrigin: true,
           secure: false,
         },
         '/socket.io': {
-          target: 'http://localhost:5000',
+          // target: 'http://localhost:5000',
+          target: "https://local-learn-backend.vercel.app",
           changeOrigin: true,
           ws: true,
         },
