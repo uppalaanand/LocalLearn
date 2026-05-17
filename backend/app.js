@@ -30,11 +30,16 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: config.clientUrl,
+  origin: [
+    'https://local-learn-frontend.vercel.app',
+    'http://localhost:3000',
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.options('*', cors());
 
 // =============================================
 // Body Parsing & Utilities
