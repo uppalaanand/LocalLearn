@@ -6,7 +6,8 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 5000,
 
   // MongoDB
-  mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/locallearn',
+  // mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/locallearn',
+  mongoUri: process.env.MONGODB_URI,
 
   // JWT
   jwt: {
