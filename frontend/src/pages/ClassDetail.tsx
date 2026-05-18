@@ -4,17 +4,20 @@ import { MapPin, Star, Calendar, Clock, Users, Award, ShieldCheck, ChevronLeft, 
 import { classService } from '../services/dataServices';
 import { useFavorites } from '../hooks/useFavorites';
 import { useAuth } from '../context/AuthContext';
+import { useRole } from '../context/RoleContext';
 
 export default function ClassDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { isAuthenticated } = useAuth();
+  const { role } = useRole();
 
   const [cls, setCls] = useState<any>(null);
   const [teacher, setTeacher] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [joinStatus, setJoinStatus] = useState<string>('none');
 
   useEffect(() => {
     const fetchClass = async () => {
@@ -22,6 +25,15 @@ export default function ClassDetail() {
         const res = await classService.getClassById(id!);
         setCls(res.data);
         setTeacher(res.data.teacher);
+        
+        if (isAuthenticated && role === 'student') {
+          try {
+            const statusRes = await classService.getJoinStatus(id!);
+            setJoinStatus(statusRes.data.status);
+          } catch (e) {
+            console.error('Error fetching join status:', e);
+          }
+        }
       } catch (error) {
         console.error('Error fetching class:', error);
       } finally {
@@ -36,12 +48,15 @@ export default function ClassDetail() {
       navigate('/login');
       return;
     }
+    if (joinStatus !== 'none') return;
+
     setEnrolling(true);
     try {
-      await classService.enrollInClass(id!);
-      alert('Enrolled successfully!');
+      await classService.joinRequest(id!);
+      setJoinStatus('pending');
+      alert('Join request sent successfully! Pending teacher approval.');
     } catch (err: any) {
-      alert(err.message || 'Failed to enroll');
+      alert(err.response?.data?.message || err.message || 'Failed to send request');
     } finally {
       setEnrolling(false);
     }
@@ -159,7 +174,7 @@ export default function ClassDetail() {
           </div>
 
           {/* Announcements */}
-          {announcements.length > 0 && (
+          {/* {announcements.length > 0 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Bell className="h-6 w-6 text-indigo-600" /> Important Updates
@@ -176,7 +191,7 @@ export default function ClassDetail() {
                 ))}
               </div>
             </div>
-          )}
+          )} */}
 
           {/* Reviews */}
           <div>
@@ -244,10 +259,15 @@ export default function ClassDetail() {
             <div className="space-y-4">
               <button
                 onClick={handleEnroll}
-                disabled={enrolling}
-                className="w-full bg-indigo-600 text-white font-bold text-lg py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200 disabled:opacity-50"
+                disabled={enrolling || joinStatus === 'pending' || joinStatus === 'rejected' || joinStatus === 'enrolled' || role === 'teacher'}
+                className="w-full bg-indigo-600 text-white font-bold text-lg py-4 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-200 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {enrolling ? 'Enrolling...' : 'Join Class'}
+                {role === 'teacher' ? 'Teachers Cannot Join' :
+                 enrolling ? 'Sending Request...' : 
+                 joinStatus === 'enrolled' ? 'Enrolled' :
+                 joinStatus === 'pending' ? 'Request Pending' :
+                 joinStatus === 'rejected' ? 'Request Rejected' :
+                 'Request to Join'}
               </button>
               
               {cls.trialAvailable && (
