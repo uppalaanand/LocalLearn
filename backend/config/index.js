@@ -32,6 +32,13 @@ const config = {
     max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
   },
 
+  // Cloudinary
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+  },
+
   // Uploads
   maxFileSize: parseInt(process.env.MAX_FILE_SIZE, 10) || 5 * 1024 * 1024,
   uploadPath: process.env.UPLOAD_PATH || './uploads',

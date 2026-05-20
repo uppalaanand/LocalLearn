@@ -24,7 +24,8 @@ export const classService = {
   joinRequest: (id: string) => api.post<any>(`/classes/${id}/join-request`),
   getJoinStatus: (id: string) => api.get<any>(`/classes/${id}/join-status`),
 
-  bookTrial: (id: string) => api.post<any>(`/classes/${id}/enroll`, { isTrial: true }),
+  bookTrial: (id: string, data?: any) => api.post<any>(`/classes/${id}/book-trial`, data),
+  getTrialStatus: (id: string) => api.get<any>(`/classes/${id}/trial-status`),
 
   getReviews: (classId: string) => api.get<any>(`/classes/${classId}/reviews`),
 
@@ -58,6 +59,10 @@ export const teacherDashService = {
   getJoinRequests: () => api.get<any>('/join-requests/teacher'),
   acceptJoinRequest: (id: string) => api.put<any>(`/join-requests/${id}/accept`),
   rejectJoinRequest: (id: string) => api.put<any>(`/join-requests/${id}/reject`),
+  
+  getTrialRequests: () => api.get<any>('/trials/teacher'),
+  acceptTrialRequest: (id: string) => api.put<any>(`/trials/${id}/accept`),
+  rejectTrialRequest: (id: string) => api.put<any>(`/trials/${id}/reject`),
 };
 
 export const classManagementService = {

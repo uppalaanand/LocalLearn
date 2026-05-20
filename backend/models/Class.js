@@ -101,6 +101,10 @@ const classSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    trialSlots: {
+      type: [String],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       default: true,

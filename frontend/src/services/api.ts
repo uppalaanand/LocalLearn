@@ -41,9 +41,13 @@ async function apiFetch<T>(
   const url = `${API_BASE_URL}${endpoint}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type to JSON if body is NOT FormData
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
@@ -136,13 +140,13 @@ export const api = {
   post: <T>(endpoint: string, data?: any) =>
     apiFetch<T>(endpoint, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
     }),
 
   put: <T>(endpoint: string, data?: any) =>
     apiFetch<T>(endpoint, {
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
     }),
 
   delete: <T>(endpoint: string) =>

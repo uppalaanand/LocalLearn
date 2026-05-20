@@ -8,6 +8,7 @@ import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import cacheManager from '../cache/cacheManager.js';
+import { uploadToCloudinary } from '../middleware/upload.js';
 
 /**
  * @desc    Get all classes with filtering, sorting, pagination
@@ -205,6 +206,13 @@ export const getClassById = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const createClass = asyncHandler(async (req, res) => {
+  // Upload photos to Cloudinary if files were provided
+  let photoUrls = [];
+  if (req.files && req.files.length > 0) {
+    const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer));
+    photoUrls = await Promise.all(uploadPromises);
+  }
+
   const classData = {
     ...req.body,
     teacher: req.user._id,
@@ -214,7 +222,7 @@ export const createClass = asyncHandler(async (req, res) => {
       standard: req.body.pricingTiers?.standard || req.body.price,
       currentEnrolled: 0,
     },
-    photos: [`https://picsum.photos/seed/${Date.now()}/600/400`],
+    photos: photoUrls.length > 0 ? photoUrls : [`https://picsum.photos/seed/${Date.now()}/600/400`],
   };
 
   const newClass = await Class.create(classData);
@@ -241,6 +249,13 @@ export const updateClass = asyncHandler(async (req, res, next) => {
   // Check ownership
   if (cls.teacher.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
     return next(ApiError.forbidden('You can only update your own classes'));
+  }
+
+  // Upload new photos to Cloudinary if files were provided
+  if (req.files && req.files.length > 0) {
+    const uploadPromises = req.files.map((file) => uploadToCloudinary(file.buffer));
+    const newPhotoUrls = await Promise.all(uploadPromises);
+    req.body.photos = [...(cls.photos || []), ...newPhotoUrls];
   }
 
   cls = await Class.findByIdAndUpdate(req.params.id, req.body, {

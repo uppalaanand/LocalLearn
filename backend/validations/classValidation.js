@@ -15,6 +15,7 @@ export const createClassSchema = {
     maxStudents: Joi.number().min(1).max(1000).default(200),
     trialAvailable: Joi.boolean().default(false),
     trialPrice: Joi.number().min(0).default(0),
+    trialSlots: Joi.array().items(Joi.string().trim().max(100)).default([]),
     pricingTiers: Joi.object({
       first50: Joi.number().min(0).optional(),
       next100: Joi.number().min(0).optional(),
@@ -38,6 +39,7 @@ export const updateClassSchema = {
     maxStudents: Joi.number().min(1).max(1000),
     trialAvailable: Joi.boolean(),
     trialPrice: Joi.number().min(0),
+    trialSlots: Joi.array().items(Joi.string().trim().max(100)),
     isActive: Joi.boolean(),
   }).min(1),
 };
