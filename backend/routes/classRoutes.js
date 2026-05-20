@@ -3,7 +3,7 @@ import {
   getClasses, getFeaturedClasses, getClassById,
   createClass, updateClass, enrollInClass,
   createJoinRequest, getJoinStatus,
-  addReview, getReviews,
+  addReview, getReviews, updateReview, deleteReview,
 } from '../controllers/classController.js';
 import { protect, authorize, optionalAuth } from '../middleware/auth.js';
 import validate from '../middleware/validate.js';
@@ -26,5 +26,7 @@ router.post('/:id/enroll', protect, authorize('student'), enrollInClass);
 router.post('/:id/join-request', protect, authorize('student'), createJoinRequest);
 router.get('/:id/join-status', protect, authorize('student'), getJoinStatus);
 router.post('/:id/reviews', protect, authorize('student'), validate(createReviewSchema), addReview);
+router.put('/:id/reviews/:reviewId', protect, authorize('student'), validate(createReviewSchema), updateReview);
+router.delete('/:id/reviews/:reviewId', protect, authorize('student'), deleteReview);
 
 export default router;

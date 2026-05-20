@@ -422,3 +422,57 @@ export const getReviews = asyncHandler(async (req, res) => {
   const response = ApiResponse.success(reviews);
   res.status(response.statusCode).json(response);
 });
+
+/**
+ * @desc    Update a review
+ * @route   PUT /api/classes/:id/reviews/:reviewId
+ * @access  Private (Review owner only)
+ */
+export const updateReview = asyncHandler(async (req, res, next) => {
+  let review = await Review.findById(req.params.reviewId);
+  
+  if (!review) {
+    return next(ApiError.notFound('Review not found'));
+  }
+
+  if (review.class.toString() !== req.params.id) {
+    return next(ApiError.badRequest('Review does not belong to this class'));
+  }
+
+  if (review.student.toString() !== req.user._id.toString()) {
+    return next(ApiError.forbidden('You can only update your own review'));
+  }
+
+  review.rating = req.body.rating;
+  review.text = req.body.text;
+  await review.save();
+
+  const response = ApiResponse.success(review, 'Review updated successfully');
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Delete a review
+ * @route   DELETE /api/classes/:id/reviews/:reviewId
+ * @access  Private (Review owner only)
+ */
+export const deleteReview = asyncHandler(async (req, res, next) => {
+  const review = await Review.findById(req.params.reviewId);
+  
+  if (!review) {
+    return next(ApiError.notFound('Review not found'));
+  }
+
+  if (review.class.toString() !== req.params.id) {
+    return next(ApiError.badRequest('Review does not belong to this class'));
+  }
+
+  if (review.student.toString() !== req.user._id.toString()) {
+    return next(ApiError.forbidden('You can only delete your own review'));
+  }
+
+  await Review.findOneAndDelete({ _id: req.params.reviewId });
+
+  const response = ApiResponse.success(null, 'Review deleted successfully');
+  res.status(response.statusCode).json(response);
+});

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, Megaphone, Calendar, MessageSquare, CheckSquare, DollarSign, Users, Plus, Send, CheckCircle2, X, Loader2 } from 'lucide-react';
-import { classManagementService } from '../services/dataServices';
+import { ChevronLeft, Megaphone, Calendar, MessageSquare, CheckSquare, DollarSign, Users, Plus, Send, CheckCircle2, X, Loader2, Star, Edit, Trash2 } from 'lucide-react';
+import { classManagementService, classService } from '../services/dataServices';
 import { useRole } from '../context/RoleContext';
 import { useAuth } from '../context/AuthContext';
 
-type Tab = 'announcements' | 'schedule' | 'chat' | 'attendance' | 'payments' | 'members';
+type Tab = 'announcements' | 'schedule' | 'chat' | 'attendance' | 'payments' | 'members' | 'reviews';
 
 export default function ClassManagement() {
   const { id } = useParams<{ id: string }>();
@@ -23,23 +23,75 @@ export default function ClassManagement() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>({ title: '', announcements: [], schedule: [], chat: [], students: [] });
   const [chatInput, setChatInput] = useState('');
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, text: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [editingReview, setEditingReview] = useState<any>(null);
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab') as Tab;
-    if (tabParam && ['announcements', 'schedule', 'chat', 'attendance', 'payments', 'members'].includes(tabParam)) setActiveTab(tabParam);
+    if (tabParam && ['announcements', 'schedule', 'chat', 'attendance', 'payments', 'members', 'reviews'].includes(tabParam)) setActiveTab(tabParam);
   }, [location]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await classManagementService.getClassManagement(id!);
+        const [res, reviewsRes] = await Promise.all([
+          classManagementService.getClassManagement(id!),
+          classService.getReviews(id!)
+        ]);
         setData(res.data);
+        setReviews(reviewsRes.data);
       } catch (error) { console.error('Error:', error); }
       finally { setLoading(false); }
     };
     if (id) fetchData();
   }, [id]);
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReviewError('');
+    if (!reviewForm.text.trim()) {
+      setReviewError('Review text is required');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      if (editingReview) {
+        const res = await classService.updateReview(id!, editingReview._id, reviewForm);
+        setReviews(reviews.map(r => r._id === editingReview._id ? res.data : r));
+        setEditingReview(null);
+      } else {
+        const res = await classService.addReview(id!, reviewForm);
+        setReviews([res.data, ...reviews]);
+      }
+      setReviewForm({ rating: 5, text: '' });
+      setReviewSuccess(true);
+      setTimeout(() => setReviewSuccess(false), 3000);
+    } catch (err: any) {
+      setReviewError(err.message || 'Error saving review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async () => {
+    if (!deletingReviewId) return;
+    try {
+      await classService.deleteReview(id!, deletingReviewId);
+      setReviews(reviews.filter(r => r._id !== deletingReviewId));
+      setDeletingReviewId(null);
+      setReviewSuccess(true);
+      setTimeout(() => setReviewSuccess(false), 3000);
+    } catch (err: any) {
+      setReviewError(err.message || 'Error deleting review');
+      setDeletingReviewId(null);
+    }
+  };
 
   const handleSaveAttendance = async () => {
     const records = Object.entries(attendanceState).map(([studentId, status]) => ({ studentId, status }));
@@ -69,6 +121,7 @@ export default function ClassManagement() {
     { id: 'attendance', label: role === 'teacher' ? 'Attendance' : 'My Attendance', icon: CheckSquare },
     { id: 'payments', label: role === 'teacher' ? 'Payments' : 'My Payments', icon: DollarSign },
     { id: 'members', label: role === 'teacher' ? 'Members' : 'Classmates', icon: Users },
+    { id: 'reviews', label: 'Reviews', icon: Star },
   ];
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 text-indigo-600 animate-spin" /></div>;
@@ -76,6 +129,11 @@ export default function ClassManagement() {
   return (
     <div className="max-w-6xl mx-auto pb-24 h-[calc(100vh-8rem)] flex flex-col relative">
       {showSuccess && (<div className="absolute top-0 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-4"><CheckCircle2 className="h-5 w-5" /><span className="font-medium">Attendance saved successfully!</span></div>)}
+      {reviewSuccess && (<div className="absolute top-0 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 z-50 animate-in fade-in slide-in-from-top-4"><CheckCircle2 className="h-5 w-5" /><span className="font-medium">Success!</span></div>)}
+
+      {deletingReviewId && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm"><h3 className="text-xl font-bold text-gray-900 mb-2">Delete Review</h3><p className="text-gray-500 mb-6">Are you sure you want to delete this review? This action cannot be undone.</p><div className="flex gap-3"><button onClick={() => setDeletingReviewId(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors">Cancel</button><button onClick={handleDeleteReview} className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors">Delete</button></div></div></div>)}
+
+      {editingReview && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-gray-900">Edit Review</h3><button onClick={() => { setEditingReview(null); setReviewForm({ rating: 5, text: '' }); setReviewError(''); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div>{reviewError && (<div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{reviewError}</div>)}<form onSubmit={handleSubmitReview} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Rating</label><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => (<button type="button" key={star} onClick={() => setReviewForm({...reviewForm, rating: star})} className="focus:outline-none"><Star className={`h-8 w-8 ${reviewForm.rating >= star ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} /></button>))}</div></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Your Review</label><textarea rows={4} value={reviewForm.text} onChange={e => setReviewForm({...reviewForm, text: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="What did you think of this class?" /></div><button type="submit" disabled={submittingReview} className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">{submittingReview && <Loader2 className="h-4 w-4 animate-spin" />} Save Changes</button></form></div></div>)}
 
       {showAddStudent && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-gray-900">Add New Student</h3><button onClick={() => setShowAddStudent(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Student Name</label><input type="text" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. John Doe" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label><input type="email" className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="john@example.com" /></div><button onClick={() => setShowAddStudent(false)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">Send Invite</button></div></div></div>)}
 
@@ -119,6 +177,74 @@ export default function ClassManagement() {
           )}</div>)}
 
         {activeTab === 'members' && (<div className="space-y-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Class Members ({data.students.length})</h2>{role === 'teacher' && (<button onClick={() => setShowAddStudent(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors"><Plus className="h-4 w-4" /> Add Student</button>)}</div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{data.students.map((student: any) => (<div key={student.id} onClick={() => role === 'teacher' ? setSelectedStudent(student) : null} className={`flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl transition-colors ${role === 'teacher' ? 'hover:border-indigo-300 cursor-pointer' : ''}`}><div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0">{student.name.charAt(0)}</div><div className="flex-1 min-w-0"><h4 className="font-bold text-gray-900 truncate">{student.name}</h4><p className="text-sm text-gray-500 truncate">Joined Oct 2023</p></div><button onClick={(e) => { e.stopPropagation(); }} className="p-2 text-gray-400 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors"><MessageSquare className="h-4 w-4" /></button></div>))}</div></div>)}
+
+        {activeTab === 'reviews' && (<div className="space-y-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Class Reviews</h2>
+          </div>
+          
+          {role === 'student' && !reviews.some(r => r.student === (user as any)?._id || r.student === (user as any)?.id) && (
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 mb-8">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Write a Review</h3>
+              {reviewError && (<div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{reviewError}</div>)}
+              <form onSubmit={handleSubmitReview} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button type="button" key={star} onClick={() => setReviewForm({...reviewForm, rating: star})} className="focus:outline-none">
+                        <Star className={`h-8 w-8 ${reviewForm.rating >= star ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Your Review</label>
+                  <textarea rows={4} value={reviewForm.text} onChange={e => setReviewForm({...reviewForm, text: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="What did you think of this class?" />
+                </div>
+                <button type="submit" disabled={submittingReview} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                  {submittingReview && <Loader2 className="h-4 w-4 animate-spin" />} Submit Review
+                </button>
+              </form>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {reviews.length === 0 ? (
+              <p className="text-gray-500">No reviews yet for this class.</p>
+            ) : (
+              reviews.map((review: any) => (
+                <div key={review._id} className="p-6 bg-white border border-gray-200 rounded-2xl">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                        {review.studentName?.charAt(0) || 'S'}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900">{review.studentName}</h4>
+                        <span className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star key={star} className={`h-4 w-4 ${review.rating >= star ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
+                        ))}
+                      </div>
+                      {role === 'student' && (review.student === (user as any)?._id || review.student === (user as any)?.id) && (
+                        <div className="flex gap-3 mt-1">
+                          <button onClick={() => { setEditingReview(review); setReviewForm({ rating: review.rating, text: review.text }); }} className="text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1 text-sm"><Edit className="h-4 w-4" /></button>
+                          <button onClick={() => setDeletingReviewId(review._id)} className="text-gray-400 hover:text-red-600 transition-colors flex items-center gap-1 text-sm"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-gray-700">{review.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>)}
       </div>
     </div>
   );

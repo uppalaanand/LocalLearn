@@ -30,6 +30,12 @@ export const classService = {
 
   addReview: (classId: string, data: { rating: number; text: string }) =>
     api.post<any>(`/classes/${classId}/reviews`, data),
+  
+  updateReview: (classId: string, reviewId: string, data: { rating: number; text: string }) =>
+    api.put<any>(`/classes/${classId}/reviews/${reviewId}`, data),
+    
+  deleteReview: (classId: string, reviewId: string) =>
+    api.delete<any>(`/classes/${classId}/reviews/${reviewId}`),
 };
 
 export const categoryService = {
