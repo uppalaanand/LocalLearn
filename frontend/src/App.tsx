@@ -12,6 +12,7 @@ import ClassDetail from './pages/ClassDetail';
 import TeacherProfile from './pages/TeacherProfile';
 import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import UserProfile from './pages/UserProfile';
 import ClassManagement from './pages/ClassManagement';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -68,6 +69,11 @@ export default function App() {
               <Route path="messages" element={
                 <ProtectedRoute>
                   <Messages />
+                </ProtectedRoute>
+              } />
+              <Route path="profile" element={
+                <ProtectedRoute>
+                  <UserProfile />
                 </ProtectedRoute>
               } />
             </Route>

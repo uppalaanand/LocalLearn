@@ -20,6 +20,8 @@ import classManagementRoutes from './routes/classManagementRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
+import joinRequestRoutes from './routes/joinRequestRoutes.js';
+
 const app = express();
 
 // =============================================
@@ -76,6 +78,8 @@ app.use('/api/class-management', classManagementRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/join-requests', joinRequestRoutes);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

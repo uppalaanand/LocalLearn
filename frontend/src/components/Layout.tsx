@@ -5,6 +5,7 @@ import { useRole } from '../context/RoleContext';
 import { useAuth } from '../context/AuthContext';
 import { messageService } from '../services/dataServices';
 import { socketService } from '../services/socketService';
+import Footer from './Footer';
 
 export default function Layout() {
   const location = useLocation();
@@ -99,10 +100,10 @@ export default function Layout() {
           <div className="flex items-center gap-4">
             {isAuthenticated && (
               <button 
-                onClick={toggleRole}
+                // onClick={toggleRole}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
               >
-                <ArrowRightLeft className="h-4 w-4" />
+                {/* <ArrowRightLeft className="h-4 w-4" /> */}
                 Viewing as: {role === 'student' ? 'Student' : 'Teacher'}
               </button>
             )}
@@ -124,9 +125,13 @@ export default function Layout() {
                 >
                   <LogOut className="h-4 w-4" />
                 </button>
-                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold">
-                  {user?.name?.charAt(0) || <User className="h-5 w-5" />}
-                </div>
+                <Link to="/profile" className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold hover:ring-2 hover:ring-indigo-600 hover:ring-offset-2 transition-all">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt={user.name} className="h-full w-full rounded-full object-cover" />
+                  ) : (
+                    user?.name?.charAt(0) || <User className="h-5 w-5" />
+                  )}
+                </Link>
               </>
             ) : (
               <Link
@@ -145,6 +150,8 @@ export default function Layout() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Outlet />
       </main>
+
+      <Footer />
 
       {/* Mobile Bottom Nav */}
       <nav className="sm:hidden fixed bottom-0 w-full bg-white border-t flex justify-around p-3 z-50">

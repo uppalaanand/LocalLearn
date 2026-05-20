@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, DollarSign, MessageSquare, Plus, ChevronRight, Settings, Loader2, BookOpen } from 'lucide-react';
+import { BarChart3, Users, DollarSign, MessageSquare, Plus, ChevronRight, Settings, Loader2, BookOpen, Check, X } from 'lucide-react';
 import { teacherDashService, classService, teacherService } from '../services/dataServices';
 import { useAuth } from '../context/AuthContext';
 
-type TeacherTab = 'overview' | 'create' | 'profile';
+type TeacherTab = 'overview' | 'create' | 'profile' | 'requests';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -15,12 +15,21 @@ export default function TeacherDashboard() {
   const [creating, setCreating] = useState(false);
   const [newClass, setNewClass] = useState({ title: '', description: '', category: 'sports', price: 2000, schedule: '', time: '', ageGroup: '', skillLevel: 'All Levels', maxStudents: 50 });
   const [profileData, setProfileData] = useState({ name: '', email: '', phone: '', experience: '', skills: '', certifications: '', about: '', location: '' });
+  const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  
+  const [editingClassData, setEditingClassData] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [savingClass, setSavingClass] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await teacherDashService.getDashboard();
-        setDashData(res.data);
+        const [dashRes, reqsRes] = await Promise.all([
+          teacherDashService.getDashboard(),
+          teacherDashService.getJoinRequests()
+        ]);
+        setDashData(dashRes.data);
+        setJoinRequests(reqsRes.data);
         if (user) setProfileData(p => ({ ...p, name: user.name, email: user.email, phone: user.phone || '' }));
       } catch (error) { console.error('Error:', error); }
       finally { setLoading(false); }
@@ -53,6 +62,50 @@ export default function TeacherDashboard() {
     } catch (err: any) { alert(err.message || 'Failed to update'); }
   };
 
+  const handleAcceptRequest = async (id: string) => {
+    try {
+      await teacherDashService.acceptJoinRequest(id);
+      setJoinRequests(prev => prev.filter(r => r.id !== id));
+      alert('Request accepted!');
+      const dashRes = await teacherDashService.getDashboard();
+      setDashData(dashRes.data);
+    } catch (err: any) { alert(err.message || 'Failed to accept'); }
+  };
+
+  const handleRejectRequest = async (id: string) => {
+    try {
+      await teacherDashService.rejectJoinRequest(id);
+      setJoinRequests(prev => prev.filter(r => r.id !== id));
+      alert('Request rejected');
+    } catch (err: any) { alert(err.message || 'Failed to reject'); }
+  };
+
+  const handleOpenEditClass = async (classId: string) => {
+    try {
+      const res = await classService.getClassById(classId);
+      setEditingClassData(res.data);
+      setShowEditModal(true);
+    } catch (err: any) {
+      alert(err.message || 'Failed to fetch class details');
+    }
+  };
+
+  const handleUpdateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingClass(true);
+    try {
+      await classService.updateClass(editingClassData.id, editingClassData);
+      alert('Class updated successfully!');
+      setShowEditModal(false);
+      const res = await teacherDashService.getDashboard();
+      setDashData(res.data);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update class');
+    } finally {
+      setSavingClass(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 text-indigo-600 animate-spin" /></div>;
 
   const stats = dashData?.stats || {};
@@ -74,6 +127,7 @@ export default function TeacherDashboard() {
       <div className="flex overflow-x-auto hide-scrollbar border-b border-gray-200 mb-8">
         {[
           { id: 'overview' as TeacherTab, label: 'Overview', icon: BarChart3 },
+          { id: 'requests' as TeacherTab, label: `Join Requests (${joinRequests.length})`, icon: Users },
           { id: 'create' as TeacherTab, label: 'Create Class', icon: Plus },
           { id: 'profile' as TeacherTab, label: 'My Profile', icon: Settings },
         ].map(tab => { const Icon = tab.icon; const isActive = activeTab === tab.id; return (
@@ -98,6 +152,15 @@ export default function TeacherDashboard() {
                   <div><h3 className="text-lg font-bold text-gray-900">{cls.title}</h3><p className="text-sm text-gray-500">{cls.studentsCount} students • Next: {cls.nextSession}</p></div>
                   <div className="flex items-center gap-4">
                     {cls.pendingPayments > 0 && <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">{cls.pendingPayments} pending payments</span>}
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        handleOpenEditClass(cls.classId); 
+                      }} 
+                      className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      Edit
+                    </button>
                     <ChevronRight className="h-5 w-5 text-gray-400" />
                   </div>
                 </div>))}
@@ -117,6 +180,45 @@ export default function TeacherDashboard() {
               </div>
             </div>)}
         </div>)}
+
+      {activeTab === 'requests' && (
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-gray-900">Pending Join Requests</h2>
+          </div>
+          
+          {joinRequests.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
+              <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-gray-900">No pending requests</h3>
+              <p className="text-gray-500 mt-2">You're all caught up! When students request to join your classes, they will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {joinRequests.map(req => (
+                <div key={req.id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <img src={req.studentAvatar || 'https://i.pravatar.cc/150'} alt={req.studentName} className="h-14 w-14 rounded-full object-cover bg-gray-100" />
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{req.studentName}</h3>
+                      <p className="text-sm text-gray-500 font-medium mt-0.5">Wants to join: <span className="text-indigo-600">{req.className}</span></p>
+                      <p className="text-xs text-gray-400 mt-1">Requested on {new Date(req.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => handleRejectRequest(req.id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-red-50 text-red-600 font-medium rounded-xl hover:bg-red-100 transition-colors">
+                      <X className="h-4 w-4" /> Reject
+                    </button>
+                    <button onClick={() => handleAcceptRequest(req.id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+                      <Check className="h-4 w-4" /> Accept
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'create' && (
         <div className="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
@@ -154,6 +256,37 @@ export default function TeacherDashboard() {
             <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors">Save Profile</button>
           </form>
         </div>)}
+
+      {showEditModal && editingClassData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto py-10">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-2xl my-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Edit Class</h2>
+              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
+            </div>
+            <form onSubmit={handleUpdateClass} className="space-y-6">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Class Title *</label><input type="text" required value={editingClassData.title} onChange={e => setEditingClassData({...editingClassData, title: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Description *</label><textarea required value={editingClassData.description} onChange={e => setEditingClassData({...editingClassData, description: e.target.value})} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Category *</label><select value={editingClassData.category} onChange={e => setEditingClassData({...editingClassData, category: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3"><option value="sports">Sports</option><option value="dance">Dance</option><option value="music">Music</option><option value="academics">Academics</option><option value="fitness">Fitness</option><option value="coding">Coding</option><option value="arts">Arts</option><option value="languages">Languages</option></select></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (₹/month) *</label><input type="number" required min={0} value={editingClassData.price} onChange={e => setEditingClassData({...editingClassData, price: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Schedule</label><input type="text" value={editingClassData.schedule || ''} onChange={e => setEditingClassData({...editingClassData, schedule: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Time</label><input type="text" value={editingClassData.time || ''} onChange={e => setEditingClassData({...editingClassData, time: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Age Group</label><input type="text" value={editingClassData.ageGroup || ''} onChange={e => setEditingClassData({...editingClassData, ageGroup: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Skill Level</label><select value={editingClassData.skillLevel || 'All Levels'} onChange={e => setEditingClassData({...editingClassData, skillLevel: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3"><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>All Levels</option></select></div>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Max Students Capacity</label><input type="number" min={1} max={1000} value={editingClassData.maxStudents || 50} onChange={e => setEditingClassData({...editingClassData, maxStudents: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+              </div>
+              <button type="submit" disabled={savingClass} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50">{savingClass ? 'Saving Changes...' : 'Save Changes'}</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

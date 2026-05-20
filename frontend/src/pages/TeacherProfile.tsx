@@ -1,24 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Star, Award, CheckCircle, ChevronLeft, MessageSquare, Heart, Loader2 } from 'lucide-react';
+import { MapPin, Star, Award, CheckCircle, ChevronLeft, MessageSquare, Heart, Loader2, Edit2, Save, X } from 'lucide-react';
 import { teacherService } from '../services/dataServices';
 import { useFavorites } from '../hooks/useFavorites';
+import { useAuth } from '../context/AuthContext';
 
 export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { user } = useAuth();
 
   const [teacher, setTeacher] = useState<any>(null);
   const [teacherClasses, setTeacherClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [formData, setFormData] = useState<any>({});
+  
+  const isOwner = user?._id === id;
 
   useEffect(() => {
     const fetchTeacher = async () => {
       try {
         const res = await teacherService.getTeacherById(id!);
         setTeacher(res.data);
+        console.log(res.data);
         setTeacherClasses(res.data.classes || []);
+        
+        setFormData({
+          name: res.data.name || '',
+          experience: res.data.experience || '',
+          about: res.data.about || '',
+          locationAddress: res.data.location || '',
+          skills: res.data.skills?.join(', ') || '',
+          certifications: res.data.certifications?.join(', ') || '',
+        });
       } catch (error) {
         console.error('Error fetching teacher:', error);
       } finally {
@@ -35,6 +54,32 @@ export default function TeacherProfile() {
       </div>
     );
   }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      setUpdateLoading(true);
+      await teacherService.updateProfile({
+        name: formData.name,
+        experience: formData.experience,
+        about: formData.about,
+        location: formData.locationAddress,
+        skills: formData.skills.split(',').map((s: string) => s.trim()).filter(Boolean),
+        certifications: formData.certifications.split(',').map((s: string) => s.trim()).filter(Boolean),
+      });
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Failed to update profile', err);
+      setError(err.response?.data?.message || 'Failed to update profile');
+      setUpdateLoading(false);
+    }
+  };
 
   if (!teacher) {
     return <div className="text-center py-20 text-gray-500">Teacher not found</div>;
@@ -64,34 +109,88 @@ export default function TeacherProfile() {
               <h1 className="text-3xl font-extrabold text-gray-900">{teacher.name}</h1>
               <p className="text-lg text-indigo-600 font-medium">{teacher.skills?.[0]}</p>
             </div>
-            <button 
-              onClick={() => navigate(`/messages?userId=${teacher.id}&name=${encodeURIComponent(teacher.name)}`)}
-              className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
-            >
-              <MessageSquare className="h-5 w-5" /> Message
-            </button>
+            
+            {isOwner ? (
+              !isEditing && (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
+                >
+                  <Edit2 className="h-5 w-5" /> Edit Profile
+                </button>
+              )
+            ) : (
+              <button 
+                onClick={() => navigate(`/messages?userId=${teacher.id}&name=${encodeURIComponent(teacher.name)}`)}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                <MessageSquare className="h-5 w-5" /> Message
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600">
-            <div className="flex items-center gap-1">
-              <Star className="h-5 w-5 text-yellow-400 fill-current" />
-              <span className="font-bold text-gray-900">{teacher.rating}</span>
-              <span>({teacher.reviewsCount} reviews)</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <MapPin className="h-5 w-5 text-gray-400" />
-              {teacher.location}
-            </div>
-            <div className="flex items-center gap-1">
-              <Award className="h-5 w-5 text-gray-400" />
-              {teacher.experience} Experience
-            </div>
-          </div>
+          {!isEditing ? (
+            <>
+              <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600">
+                <div className="flex items-center gap-1">
+                  <Star className="h-5 w-5 text-yellow-400 fill-current" />
+                  <span className="font-bold text-gray-900">{teacher.rating}</span>
+                  <span>({teacher.reviewsCount} reviews)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-5 w-5 text-gray-400" />
+                  {teacher.location}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Award className="h-5 w-5 text-gray-400" />
+                  {teacher.experience} Experience
+                </div>
+              </div>
 
-          <div className="pt-4 border-t border-gray-100">
-            <h3 className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wider">About</h3>
-            <p className="text-gray-600 leading-relaxed">{teacher.about}</p>
-          </div>
+              <div className="pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wider">About</h3>
+                <p className="text-gray-600 leading-relaxed">{teacher.about}</p>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-gray-100">
+              {error && <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <input type="text" name="locationAddress" value={formData.locationAddress} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Experience</label>
+                  <input type="text" name="experience" value={formData.experience} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g. 5+ Years" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Skills (comma separated)</label>
+                  <input type="text" name="skills" value={formData.skills} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Certifications (comma separated)</label>
+                  <input type="text" name="certifications" value={formData.certifications} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">About</label>
+                  <textarea name="about" value={formData.about} onChange={handleChange} rows={3} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button type="submit" disabled={updateLoading} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-70">
+                  {updateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Changes
+                </button>
+                <button type="button" onClick={() => setIsEditing(false)} disabled={updateLoading} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors">
+                  <X className="h-4 w-4" /> Cancel
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 

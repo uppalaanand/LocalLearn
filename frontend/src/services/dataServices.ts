@@ -1,5 +1,10 @@
 import api from './api';
 
+export const authService = {
+  getMe: () => api.get<any>('/auth/me'),
+  updateProfile: (data: any) => api.put<any>('/auth/profile', data),
+};
+
 export const classService = {
   getClasses: (params?: Record<string, string>) => {
     const query = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -15,6 +20,9 @@ export const classService = {
   updateClass: (id: string, data: any) => api.put<any>(`/classes/${id}`, data),
 
   enrollInClass: (id: string) => api.post<any>(`/classes/${id}/enroll`),
+  
+  joinRequest: (id: string) => api.post<any>(`/classes/${id}/join-request`),
+  getJoinStatus: (id: string) => api.get<any>(`/classes/${id}/join-status`),
 
   bookTrial: (id: string) => api.post<any>(`/classes/${id}/enroll`, { isTrial: true }),
 
@@ -41,6 +49,9 @@ export const studentService = {
 
 export const teacherDashService = {
   getDashboard: () => api.get<any>('/teacher/dashboard'),
+  getJoinRequests: () => api.get<any>('/join-requests/teacher'),
+  acceptJoinRequest: (id: string) => api.put<any>(`/join-requests/${id}/accept`),
+  rejectJoinRequest: (id: string) => api.put<any>(`/join-requests/${id}/reject`),
 };
 
 export const classManagementService = {

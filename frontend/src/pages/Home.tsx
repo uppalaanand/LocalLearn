@@ -27,8 +27,8 @@ export default function Home() {
           teacherService.getTeachers(),
         ]);
         setCategories(catRes.data || []);
-        setClasses(classRes.data || []);
-        setTeachers(teacherRes.data || []);
+        setClasses((classRes.data || []).slice(0, 3));
+        setTeachers((teacherRes.data || []).slice(0, 6));
       } catch (error) {
         console.error('Error fetching home data:', error);
       } finally {

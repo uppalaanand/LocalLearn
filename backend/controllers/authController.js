@@ -12,7 +12,7 @@ import config from '../config/index.js';
  * @access  Public
  */
 export const register = asyncHandler(async (req, res, next) => {
-  const { name, email, password, role, phone } = req.body;
+  const { name, email, password, role, phone, location } = req.body;
 
   // Check if user already exists
   const existingUser = await User.findOne({ email });
@@ -20,8 +20,17 @@ export const register = asyncHandler(async (req, res, next) => {
     return next(ApiError.conflict('A user with this email already exists.'));
   }
 
+  const userData = { name, email, password, role, phone };
+  
+  if (location) {
+    userData.location = {
+      type: 'Point',
+      address: typeof location === 'string' ? location : location?.address,
+    };
+  }
+
   // Create user
-  const user = await User.create({ name, email, password, role, phone });
+  const user = await User.create(userData);
 
   // If teacher, create teacher profile
   if (role === 'teacher') {
@@ -55,6 +64,7 @@ export const register = asyncHandler(async (req, res, next) => {
       role: user.role,
       phone: user.phone,
       avatar: user.avatar,
+      location: user.location,
     },
     accessToken,
   }, 'Registration successful');
@@ -105,6 +115,7 @@ export const login = asyncHandler(async (req, res, next) => {
       email: user.email,
       role: user.role,
       phone: user.phone,
+      location: user.location,
       avatar: user.avatar,
     },
     accessToken,
@@ -205,6 +216,48 @@ export const getMe = asyncHandler(async (req, res) => {
     },
     teacherProfile,
   });
+
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Update current user profile
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
+export const updateProfile = asyncHandler(async (req, res, next) => {
+  const { name, email, phone, location, avatar } = req.body;
+
+  const updateFields = {};
+  if (name) updateFields.name = name;
+  if (email) updateFields.email = email;
+  if (phone !== undefined) updateFields.phone = phone;
+  if (avatar) updateFields.avatar = avatar;
+  
+  if (location && location.address) {
+    updateFields['location.address'] = location.address;
+    if (location.coordinates) {
+      updateFields['location.coordinates'] = location.coordinates;
+    }
+  }
+
+  // Check if email is already taken by another user
+  if (email) {
+    const existingUser = await User.findOne({ email, _id: { $ne: req.user._id } });
+    if (existingUser) {
+      return next(ApiError.conflict('Email is already in use by another account.'));
+    }
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updateFields },
+    { new: true, runValidators: true }
+  ).select('-password -refreshToken');
+
+  const response = ApiResponse.success({
+    user: updatedUser
+  }, 'Profile updated successfully');
 
   res.status(response.statusCode).json(response);
 });

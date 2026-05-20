@@ -22,9 +22,11 @@ export const getTeachers = asyncHandler(async (req, res) => {
     .sort({ rating: -1 })
     .lean();
 
-  const teachers = profiles.map((p) => ({
-    id: p.user._id,
-    name: p.user.name,
+  const teachers = profiles
+    .filter(p => p && p.user)
+    .map((p) => ({
+      id: p.user._id,
+      name: p.user.name,
     photo: p.photo || p.user.avatar || '',
     experience: p.experience,
     skills: p.skills,

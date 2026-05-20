@@ -2,6 +2,7 @@ import Class from '../models/Class.js';
 import TeacherProfile from '../models/TeacherProfile.js';
 import Review from '../models/Review.js';
 import Enrollment from '../models/Enrollment.js';
+import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
@@ -294,6 +295,84 @@ export const enrollInClass = asyncHandler(async (req, res, next) => {
   cacheManager.delByPrefix('featured_classes');
 
   const response = ApiResponse.created(enrollment, 'Enrolled successfully');
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Create a join request for a class
+ * @route   POST /api/classes/:id/join-request
+ * @access  Private (Student only)
+ */
+export const createJoinRequest = asyncHandler(async (req, res, next) => {
+  const cls = await Class.findById(req.params.id);
+
+  if (!cls) {
+    return next(ApiError.notFound('Class not found'));
+  }
+
+  if (cls.studentsCount >= cls.maxStudents) {
+    return next(ApiError.badRequest('This class is full'));
+  }
+
+  // Check if already enrolled
+  const existingEnrollment = await Enrollment.findOne({
+    student: req.user._id,
+    class: cls._id,
+  });
+
+  if (existingEnrollment) {
+    return next(ApiError.conflict('You are already enrolled in this class'));
+  }
+
+  // Check if request already exists
+  const existingRequest = await JoinRequest.findOne({
+    student: req.user._id,
+    class: cls._id,
+    status: { $in: ['pending', 'accepted'] }
+  });
+
+  if (existingRequest) {
+    return next(ApiError.conflict('You already have a pending or accepted request for this class'));
+  }
+
+  // Create join request
+  const joinRequest = await JoinRequest.create({
+    student: req.user._id,
+    teacher: cls.teacher,
+    class: cls._id,
+    status: 'pending',
+  });
+
+  const response = ApiResponse.created(joinRequest, 'Join request sent successfully');
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Get join request status for a class
+ * @route   GET /api/classes/:id/join-status
+ * @access  Private (Student only)
+ */
+export const getJoinStatus = asyncHandler(async (req, res, next) => {
+  // First check if enrolled
+  const existingEnrollment = await Enrollment.findOne({
+    student: req.user._id,
+    class: req.params.id,
+  });
+
+  if (existingEnrollment) {
+    const response = ApiResponse.success({ status: 'enrolled' });
+    return res.status(response.statusCode).json(response);
+  }
+
+  // Then check request
+  const existingRequest = await JoinRequest.findOne({
+    student: req.user._id,
+    class: req.params.id,
+  }).sort({ createdAt: -1 });
+
+  const status = existingRequest ? existingRequest.status : 'none';
+
+  const response = ApiResponse.success({ status });
   res.status(response.statusCode).json(response);
 });
 
