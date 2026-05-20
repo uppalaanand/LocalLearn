@@ -13,23 +13,28 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [dashData, setDashData] = useState<any>(null);
   const [creating, setCreating] = useState(false);
-  const [newClass, setNewClass] = useState({ title: '', description: '', category: 'sports', price: 2000, schedule: '', time: '', ageGroup: '', skillLevel: 'All Levels', maxStudents: 50 });
+  const [newClass, setNewClass] = useState({ title: '', description: '', category: 'sports', price: 2000, schedule: '', time: '', ageGroup: '', skillLevel: 'All Levels', maxStudents: 50, trialAvailable: false, trialPrice: 0, trialSlots: '' });
+  const [newClassPhotos, setNewClassPhotos] = useState<File[]>([]);
   const [profileData, setProfileData] = useState({ name: '', email: '', phone: '', experience: '', skills: '', certifications: '', about: '', location: '' });
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
+  const [trialRequests, setTrialRequests] = useState<any[]>([]);
   
   const [editingClassData, setEditingClassData] = useState<any>(null);
+  const [editClassPhotos, setEditClassPhotos] = useState<File[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [savingClass, setSavingClass] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dashRes, reqsRes] = await Promise.all([
+        const [dashRes, reqsRes, trialsRes] = await Promise.all([
           teacherDashService.getDashboard(),
-          teacherDashService.getJoinRequests()
+          teacherDashService.getJoinRequests(),
+          teacherDashService.getTrialRequests().catch(() => ({ data: [] }))
         ]);
         setDashData(dashRes.data);
         setJoinRequests(reqsRes.data);
+        setTrialRequests(trialsRes.data);
         if (user) setProfileData(p => ({ ...p, name: user.name, email: user.email, phone: user.phone || '' }));
       } catch (error) { console.error('Error:', error); }
       finally { setLoading(false); }
@@ -41,7 +46,14 @@ export default function TeacherDashboard() {
     e.preventDefault();
     setCreating(true);
     try {
-      await classService.createClass(newClass);
+      const formData = new FormData();
+      Object.entries(newClass).forEach(([key, value]) => {
+        formData.append(key, value.toString());
+      });
+      newClassPhotos.forEach(photo => {
+        formData.append('photos', photo);
+      });
+      await classService.createClass(formData);
       alert('Class created successfully!');
       setActiveTab('overview');
       const res = await teacherDashService.getDashboard();
@@ -80,10 +92,31 @@ export default function TeacherDashboard() {
     } catch (err: any) { alert(err.message || 'Failed to reject'); }
   };
 
+  const handleAcceptTrial = async (id: string) => {
+    try {
+      await teacherDashService.acceptTrialRequest(id);
+      setTrialRequests(prev => prev.filter(r => (r.id || r._id) !== id));
+      alert('Trial Request accepted!');
+    } catch (err: any) { alert(err.message || 'Failed to accept'); }
+  };
+
+  const handleRejectTrial = async (id: string) => {
+    try {
+      await teacherDashService.rejectTrialRequest(id);
+      setTrialRequests(prev => prev.filter(r => (r.id || r._id) !== id));
+      alert('Trial Request rejected');
+    } catch (err: any) { alert(err.message || 'Failed to reject'); }
+  };
+
   const handleOpenEditClass = async (classId: string) => {
     try {
       const res = await classService.getClassById(classId);
-      setEditingClassData(res.data);
+      const data = res.data;
+      if (Array.isArray(data.trialSlots)) {
+        data.trialSlots = data.trialSlots.join(', ');
+      }
+      setEditingClassData(data);
+      setEditClassPhotos([]);
       setShowEditModal(true);
     } catch (err: any) {
       alert(err.message || 'Failed to fetch class details');
@@ -94,7 +127,17 @@ export default function TeacherDashboard() {
     e.preventDefault();
     setSavingClass(true);
     try {
-      await classService.updateClass(editingClassData.id, editingClassData);
+      const formData = new FormData();
+      Object.entries(editingClassData).forEach(([key, value]) => {
+        if (key === 'photos') return;
+        if (value !== null && value !== undefined) {
+          formData.append(key, (value as any).toString());
+        }
+      });
+      editClassPhotos.forEach(photo => {
+        formData.append('photos', photo);
+      });
+      await classService.updateClass(editingClassData.id || editingClassData._id, formData);
       alert('Class updated successfully!');
       setShowEditModal(false);
       const res = await teacherDashService.getDashboard();
@@ -127,7 +170,7 @@ export default function TeacherDashboard() {
       <div className="flex overflow-x-auto hide-scrollbar border-b border-gray-200 mb-8">
         {[
           { id: 'overview' as TeacherTab, label: 'Overview', icon: BarChart3 },
-          { id: 'requests' as TeacherTab, label: `Join Requests (${joinRequests.length})`, icon: Users },
+          { id: 'requests' as TeacherTab, label: `Requests (${joinRequests.length + trialRequests.filter(r => r.status === 'pending').length})`, icon: Users },
           { id: 'create' as TeacherTab, label: 'Create Class', icon: Plus },
           { id: 'profile' as TeacherTab, label: 'My Profile', icon: Settings },
         ].map(tab => { const Icon = tab.icon; const isActive = activeTab === tab.id; return (
@@ -217,6 +260,48 @@ export default function TeacherDashboard() {
               ))}
             </div>
           )}
+
+          <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">Trial Requests</h2>
+          
+          {trialRequests.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
+              <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-gray-900">No trial requests</h3>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* {console.log(trialRequests)} */}
+              {trialRequests.map(req => (
+                <div key={req.id || req._id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="flex items-center gap-4">
+                    <img src={req.student?.avatar || req.studentAvatar || 'https://i.pravatar.cc/150'} alt={req.student?.name || req.studentName} className="h-14 w-14 rounded-full object-cover bg-gray-100" />
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">{req.student?.name || req.studentName}</h3>
+                      <p className="text-sm text-gray-500 font-medium mt-0.5">Trial for: <span className="text-indigo-600">{req.class?.title || req.className}</span></p>
+                      <p className="text-sm text-gray-700 font-medium mt-0.5">Requested Slot: <span className="font-bold">{req.selectedSlot}</span></p>
+                      <p className="text-xs text-gray-400 mt-1">Requested on {new Date(req.createdAt || req.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    {req.status === 'pending' ? (
+                      <>
+                        <button onClick={() => handleRejectTrial(req.id || req._id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-red-50 text-red-600 font-medium rounded-xl hover:bg-red-100 transition-colors">
+                          <X className="h-4 w-4" /> Reject
+                        </button>
+                        <button onClick={() => handleAcceptTrial(req.id || req._id)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+                          <Check className="h-4 w-4" /> Accept
+                        </button>
+                      </>
+                    ) : (
+                      <span className={`px-4 py-2 rounded-xl text-sm font-bold ${req.status === 'accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {req.status === 'accepted' ? 'Accepted' : 'Rejected'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -238,6 +323,27 @@ export default function TeacherDashboard() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Age Group</label><input type="text" value={newClass.ageGroup} onChange={e => setNewClass({...newClass, ageGroup: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" placeholder="e.g. 10-15 years" /></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Skill Level</label><select value={newClass.skillLevel} onChange={e => setNewClass({...newClass, skillLevel: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3"><option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>All Levels</option></select></div>
             </div>
+            
+            <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={newClass.trialAvailable} onChange={e => setNewClass({...newClass, trialAvailable: e.target.checked})} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500" />
+                <span className="text-sm font-bold text-indigo-900">Offer Trial Classes</span>
+              </label>
+              {newClass.trialAvailable && (
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-medium text-indigo-900 mb-1">Trial Price (₹)</label><input type="number" min={0} value={newClass.trialPrice} onChange={e => setNewClass({...newClass, trialPrice: Number(e.target.value)})} className="w-full border border-indigo-200 rounded-xl px-4 py-3" placeholder="0 for free" /></div>
+                  <div><label className="block text-sm font-medium text-indigo-900 mb-1">Trial Slots (comma separated)</label><input type="text" value={newClass.trialSlots} onChange={e => setNewClass({...newClass, trialSlots: e.target.value})} className="w-full border border-indigo-200 rounded-xl px-4 py-3" placeholder="e.g. Sat 10AM, Sun 11AM" /></div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Class Photos</label>
+              <input type="file" multiple accept="image/*" onChange={e => {
+                if (e.target.files) setNewClassPhotos(Array.from(e.target.files));
+              }} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+            </div>
+
             <button type="submit" disabled={creating} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50">{creating ? 'Creating...' : 'Create Class'}</button>
           </form>
         </div>)}
@@ -282,6 +388,28 @@ export default function TeacherDashboard() {
               <div className="grid grid-cols-1 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Max Students Capacity</label><input type="number" min={1} max={1000} value={editingClassData.maxStudents || 50} onChange={e => setEditingClassData({...editingClassData, maxStudents: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
               </div>
+              
+              <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={editingClassData.trialAvailable || false} onChange={e => setEditingClassData({...editingClassData, trialAvailable: e.target.checked})} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500" />
+                  <span className="text-sm font-bold text-indigo-900">Offer Trial Classes</span>
+                </label>
+                {editingClassData.trialAvailable && (
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div><label className="block text-sm font-medium text-indigo-900 mb-1">Trial Price (₹)</label><input type="number" min={0} value={editingClassData.trialPrice || 0} onChange={e => setEditingClassData({...editingClassData, trialPrice: Number(e.target.value)})} className="w-full border border-indigo-200 rounded-xl px-4 py-3" /></div>
+                    <div><label className="block text-sm font-medium text-indigo-900 mb-1">Trial Slots (comma separated)</label><input type="text" value={editingClassData.trialSlots || ''} onChange={e => setEditingClassData({...editingClassData, trialSlots: e.target.value})} className="w-full border border-indigo-200 rounded-xl px-4 py-3" /></div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Update Class Photos</label>
+                <input type="file" multiple accept="image/*" onChange={e => {
+                  if (e.target.files) setEditClassPhotos(Array.from(e.target.files));
+                }} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                <p className="text-xs text-gray-400 mt-1">Leave empty to keep existing photos.</p>
+              </div>
+
               <button type="submit" disabled={savingClass} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50">{savingClass ? 'Saving Changes...' : 'Save Changes'}</button>
             </form>
           </div>

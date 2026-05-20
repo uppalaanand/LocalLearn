@@ -17,6 +17,9 @@ const io = new SocketIOServer(server, {
   },
 });
 
+// Share io instance with express app
+app.set('io', io);
+
 // Initialize chat sockets
 initChatSocket(io);
 

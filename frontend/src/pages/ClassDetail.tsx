@@ -18,6 +18,10 @@ export default function ClassDetail() {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const [joinStatus, setJoinStatus] = useState<string>('none');
+  const [trialStatus, setTrialStatus] = useState<string>('none');
+  const [showTrialModal, setShowTrialModal] = useState(false);
+  const [selectedTrialSlot, setSelectedTrialSlot] = useState('');
+  const [bookingTrial, setBookingTrial] = useState(false);
 
   useEffect(() => {
     const fetchClass = async () => {
@@ -28,10 +32,14 @@ export default function ClassDetail() {
         
         if (isAuthenticated && role === 'student') {
           try {
-            const statusRes = await classService.getJoinStatus(id!);
+            const [statusRes, trialStatusRes] = await Promise.all([
+              classService.getJoinStatus(id!).catch(() => ({ data: { status: 'none' } })),
+              classService.getTrialStatus(id!).catch(() => ({ data: { status: 'none' } }))
+            ]);
             setJoinStatus(statusRes.data.status);
+            setTrialStatus(trialStatusRes.data?.status || 'none');
           } catch (e) {
-            console.error('Error fetching join status:', e);
+            console.error('Error fetching statuses:', e);
           }
         }
       } catch (error) {
@@ -59,6 +67,24 @@ export default function ClassDetail() {
       alert(err.response?.data?.message || err.message || 'Failed to send request');
     } finally {
       setEnrolling(false);
+    }
+  };
+
+  const handleBookTrial = async () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setBookingTrial(true);
+    try {
+      await classService.bookTrial(id!, { selectedSlot: selectedTrialSlot });
+      setTrialStatus('pending');
+      setShowTrialModal(false);
+      alert('Trial request sent successfully!');
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to book trial');
+    } finally {
+      setBookingTrial(false);
     }
   };
 
@@ -271,8 +297,15 @@ export default function ClassDetail() {
               </button>
               
               {cls.trialAvailable && (
-                <button className="w-full bg-white border-2 border-indigo-600 text-indigo-600 font-bold text-lg py-3.5 rounded-xl hover:bg-indigo-50 transition-colors">
-                  Book Trial for ₹{cls.trialPrice}
+                <button 
+                  onClick={() => {
+                    if (!isAuthenticated) navigate('/login');
+                    else setShowTrialModal(true);
+                  }}
+                  disabled={trialStatus === 'pending' || trialStatus === 'accepted' || role === 'teacher'}
+                  className="w-full bg-white border-2 border-indigo-600 text-indigo-600 font-bold text-lg py-3.5 rounded-xl hover:bg-indigo-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {trialStatus === 'pending' ? 'Trial Requested' : trialStatus === 'accepted' ? 'Trial Accepted' : `Book Trial for ₹${cls.trialPrice || 0}`}
                 </button>
               )}
               
@@ -294,6 +327,34 @@ export default function ClassDetail() {
           </div>
         </div>
       </div>
+
+      {showTrialModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-8 w-full max-w-md my-auto">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Book a Trial Class</h2>
+            <p className="text-gray-600 mb-6">Select a slot that works for you. The teacher will confirm your request.</p>
+            
+            <div className="space-y-3 mb-6">
+              {cls.trialSlots?.map((slot: string) => (
+                <label key={slot} className={`flex items-center p-4 border rounded-xl cursor-pointer transition-colors ${selectedTrialSlot === slot ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300'}`}>
+                  <input type="radio" name="trialSlot" value={slot} checked={selectedTrialSlot === slot} onChange={() => setSelectedTrialSlot(slot)} className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                  <span className="ml-3 font-medium text-gray-900">{slot}</span>
+                </label>
+              ))}
+              {(!cls.trialSlots || cls.trialSlots.length === 0) && (
+                <p className="text-gray-500 italic">No specific slots defined. Request a trial and the teacher will contact you.</p>
+              )}
+            </div>
+
+            <div className="flex gap-4">
+              <button onClick={() => setShowTrialModal(false)} className="flex-1 py-3 border border-gray-300 rounded-xl text-gray-700 font-bold hover:bg-gray-50">Cancel</button>
+              <button onClick={handleBookTrial} disabled={bookingTrial || (cls.trialSlots?.length > 0 && !selectedTrialSlot)} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50">
+                {bookingTrial ? 'Requesting...' : 'Request Slot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

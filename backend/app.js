@@ -21,6 +21,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import favoriteRoutes from './routes/favoriteRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import joinRequestRoutes from './routes/joinRequestRoutes.js';
+import trialRoutes from './routes/trialRoutes.js';
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/join-requests', joinRequestRoutes);
+app.use('/api/trials', trialRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
