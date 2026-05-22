@@ -68,7 +68,7 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Menu className="h-6 w-6 text-gray-500 sm:hidden" />
-            <Link to={role === 'student' ? '/' : '/teacher'} className="text-xl font-bold text-indigo-600 flex items-center gap-2">
+            <Link to={role === 'student' ? '/' : '/'} className="text-xl font-bold text-indigo-600 flex items-center gap-2">
               <MapPin className="h-6 w-6" />
               LocalLearn
             </Link>
