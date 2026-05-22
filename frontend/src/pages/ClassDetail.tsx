@@ -200,24 +200,24 @@ export default function ClassDetail() {
           </div>
 
           {/* Announcements */}
-          {/* {announcements.length > 0 && (
+          {announcements.length > 0 && (
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Bell className="h-6 w-6 text-indigo-600" /> Important Updates
               </h2>
               <div className="space-y-4">
                 {announcements.map((announcement: any) => (
-                  <div key={announcement.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                  <div key={announcement.id || announcement._id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
-                      <span className="font-semibold text-gray-900">{announcement.author}</span>
+                      <span className="font-semibold text-gray-900">{announcement.authorName || announcement.author}</span>
                       <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md">{announcement.date}</span>
                     </div>
-                    <p className="text-gray-700">{announcement.text}</p>
+                    <p className="text-gray-700 whitespace-pre-line">{announcement.text}</p>
                   </div>
                 ))}
               </div>
             </div>
-          )} */}
+          )}
 
           {/* Reviews */}
           <div>

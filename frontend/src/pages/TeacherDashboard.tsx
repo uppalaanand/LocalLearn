@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, Users, DollarSign, MessageSquare, Plus, ChevronRight, Settings, Loader2, BookOpen, Check, X } from 'lucide-react';
+import { BarChart3, Users, DollarSign, MessageSquare, Plus, ChevronRight, Settings, Loader2, BookOpen, Check, X, Megaphone, Calendar } from 'lucide-react';
 import { teacherDashService, classService, teacherService } from '../services/dataServices';
 import { useAuth } from '../context/AuthContext';
 
-type TeacherTab = 'overview' | 'create' | 'profile' | 'requests';
+type TeacherTab = 'overview' | 'schedule' | 'create' | 'profile' | 'requests';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TeacherTab>('overview');
+  const [selectedDay, setSelectedDay] = useState('Monday');
   const [loading, setLoading] = useState(true);
   const [dashData, setDashData] = useState<any>(null);
   const [creating, setCreating] = useState(false);
@@ -154,6 +155,10 @@ export default function TeacherDashboard() {
   const stats = dashData?.stats || {};
   const activeClasses = dashData?.activeClasses || [];
   const recentMessages = dashData?.recentMessages || [];
+  const recentAnnouncements = dashData?.recentAnnouncements || [];
+  const combinedSchedule = dashData?.combinedSchedule || [];
+  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const filteredSchedule = combinedSchedule.filter((s: any) => s.day === selectedDay).sort((a: any, b: any) => (a.startTime || '').localeCompare(b.startTime || ''));
 
   return (
     <div className="max-w-6xl mx-auto pb-24">
@@ -170,6 +175,7 @@ export default function TeacherDashboard() {
       <div className="flex overflow-x-auto hide-scrollbar border-b border-gray-200 mb-8">
         {[
           { id: 'overview' as TeacherTab, label: 'Overview', icon: BarChart3 },
+          { id: 'schedule' as TeacherTab, label: 'Schedule', icon: Calendar },
           { id: 'requests' as TeacherTab, label: `Requests (${joinRequests.length + trialRequests.filter(r => r.status === 'pending').length})`, icon: Users },
           { id: 'create' as TeacherTab, label: 'Create Class', icon: Plus },
           { id: 'profile' as TeacherTab, label: 'My Profile', icon: Settings },
@@ -211,18 +217,83 @@ export default function TeacherDashboard() {
             </div>
           </div>
 
-          {recentMessages.length > 0 && (
-            <div><h2 className="text-xl font-bold text-gray-900 mb-4">Recent Messages</h2>
-              <div className="space-y-3">
-                {recentMessages.map((msg: any) => (
-                  <div key={msg.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-3">
-                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">{msg.from?.charAt(0)}</div>
-                    <div className="flex-1 min-w-0"><p className="font-medium text-gray-900">{msg.from}</p><p className="text-sm text-gray-500 truncate">{msg.text}</p></div>
-                    <span className="text-xs text-gray-400">{msg.time}</span>
-                  </div>))}
-              </div>
-            </div>)}
+          {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-8"> */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-600" /> Recent Announcements</h2>
+            {recentMessages.length > 0 && (
+              <div><h2 className="text-xl font-bold text-gray-900 mb-4">Recent Messages</h2>
+                <div className="space-y-3">
+                  {recentMessages.map((msg: any) => (
+                    <div key={msg.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">{msg.from?.charAt(0)}</div>
+                      <div className="flex-1 min-w-0"><p className="font-medium text-gray-900">{msg.from}</p><p className="text-sm text-gray-500 truncate">{msg.text}</p></div>
+                      <span className="text-xs text-gray-400">{msg.time}</span>
+                    </div>))}
+                </div>
+              </div>)}
+
+            {recentAnnouncements.length > 0 && (
+              <div><h2 className="text-xl font-bold text-gray-900 mb-4">Recent Announcements</h2>
+                <div className="space-y-3">
+                  {recentAnnouncements.map((ann: any) => (
+                    <div key={ann.id} className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{ann.className}</span>
+                        <span className="text-xs text-gray-500">{ann.date}</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 line-clamp-2">{ann.text}</p>
+                    </div>))}
+                </div>
+              </div>)}
+          </div>
         </div>)}
+
+      {activeTab === 'schedule' && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">My Timetable</h2>
+          
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-6 pb-2">
+            {daysOfWeek.map(day => (
+              <button 
+                key={day} 
+                onClick={() => setSelectedDay(day)}
+                className={`px-6 py-2.5 rounded-full font-medium whitespace-nowrap transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-4">
+            {filteredSchedule.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-4 p-5 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 transition-colors">
+                <div className="flex flex-col items-center justify-center h-16 w-16 bg-indigo-50 rounded-xl text-indigo-600 shrink-0">
+                  <span className="text-xs font-bold uppercase">{s.day?.substring(0, 3)}</span>
+                  <span className="text-lg font-extrabold leading-none">{s.date ? new Date(s.date).getDate() : s.day?.substring(0, 3)}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">{s.title}</span>
+                  </div>
+                  <h4 className="font-bold text-gray-900 truncate">{s.topic || 'Class Session'}</h4>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                    <Calendar className="h-4 w-4" /> {s.date} • {s.startTime} - {s.endTime}
+                  </div>
+                </div>
+                <button onClick={() => navigate(`/class-management/${s.classId}?tab=schedule`)} className="px-4 py-2 bg-gray-50 text-indigo-600 text-sm font-medium rounded-xl hover:bg-indigo-50 transition-colors whitespace-nowrap">
+                  Manage
+                </button>
+              </div>
+            ))}
+            {filteredSchedule.length === 0 && (
+              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
+                <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No sessions scheduled for {selectedDay}.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeTab === 'requests' && (
         <div className="max-w-4xl mx-auto space-y-6">

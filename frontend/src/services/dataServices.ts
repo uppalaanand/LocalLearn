@@ -68,9 +68,12 @@ export const teacherDashService = {
 export const classManagementService = {
   getClassManagement: (id: string) => api.get<any>(`/class-management/${id}`),
   createAnnouncement: (id: string, text: string) => api.post<any>(`/class-management/${id}/announcements`, { text }),
+  updateAnnouncement: (classId: string, annId: string, text: string) => api.put<any>(`/class-management/${classId}/announcements/${annId}`, { text }),
+  deleteAnnouncement: (classId: string, annId: string) => api.delete<any>(`/class-management/${classId}/announcements/${annId}`),
   addSession: (id: string, data: any) => api.post<any>(`/class-management/${id}/schedule`, data),
   updateSession: (classId: string, sessionId: string, data: any) =>
     api.put<any>(`/class-management/${classId}/schedule/${sessionId}`, data),
+  deleteSession: (classId: string, sessionId: string) => api.delete<any>(`/class-management/${classId}/schedule/${sessionId}`),
   getMessages: (id: string) => api.get<any>(`/class-management/${id}/chat`),
   sendMessage: (id: string, text: string) => api.post<any>(`/class-management/${id}/chat`, { text }),
   markAttendance: (id: string, records: any[]) => api.post<any>(`/class-management/${id}/attendance`, { records }),

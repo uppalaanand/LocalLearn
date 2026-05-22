@@ -2,6 +2,8 @@ import Class from '../models/Class.js';
 import Enrollment from '../models/Enrollment.js';
 import Payment from '../models/Payment.js';
 import Message from '../models/Message.js';
+import Announcement from '../models/Announcement.js';
+import Schedule from '../models/Schedule.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
@@ -49,6 +51,44 @@ export const getTeacherDashboard = asyncHandler(async (req, res) => {
     time: msg.time,
   }));
 
+  // Get recent announcements across all classes
+  const recentAnnouncementsRaw = await Announcement.find({ class: { $in: classIds } })
+    .populate('class', 'title')
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const recentAnnouncements = recentAnnouncementsRaw.map((ann) => ({
+    id: ann._id,
+    className: ann.class?.title || 'Unknown Class',
+    title: 'New Announcement', // Using a default title or just no title if model doesn't have it
+    text: ann.text,
+    date: ann.date,
+    timestamp: ann.createdAt,
+  }));
+
+  // Get combined schedule for teacher
+  const schedulesRaw = await Schedule.find({ class: { $in: classIds } })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const combinedSchedule = await Promise.all(
+    schedulesRaw.map(async (session) => {
+      const cls = await Class.findById(session.class);
+      return {
+        id: session._id,
+        classId: session.class,
+        title: cls?.title || '',
+        date: session.date,
+        day: session.day,
+        time: session.time,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        topic: session.topic,
+      };
+    })
+  );
+
   // Calculate stats
   const totalStudents = await Enrollment.countDocuments({
     class: { $in: classIds },
@@ -79,6 +119,8 @@ export const getTeacherDashboard = asyncHandler(async (req, res) => {
     teacherName: req.user.name,
     activeClasses,
     recentMessages: formattedMessages,
+    recentAnnouncements,
+    combinedSchedule,
     stats: {
       totalStudents,
       revenue,
