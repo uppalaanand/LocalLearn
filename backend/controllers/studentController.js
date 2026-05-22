@@ -6,6 +6,7 @@ import Assignment from '../models/Assignment.js';
 import Attendance from '../models/Attendance.js';
 import User from '../models/User.js';
 import TeacherProfile from '../models/TeacherProfile.js';
+import Announcement from '../models/Announcement.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
@@ -75,6 +76,8 @@ export const getStudentDashboard = asyncHandler(async (req, res) => {
         date: session.date,
         day: session.day,
         time: session.time,
+        startTime: session.startTime,
+        endTime: session.endTime,
         topic: session.topic,
       };
     })
@@ -96,11 +99,29 @@ export const getStudentDashboard = asyncHandler(async (req, res) => {
     read: n.read,
   }));
 
+  // Get recent announcements across enrolled classes
+  const recentAnnouncementsRaw = await Announcement.find({ class: { $in: classIds } })
+    .populate('class', 'title')
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const recentAnnouncements = recentAnnouncementsRaw.map((ann) => ({
+    id: ann._id,
+    className: ann.class?.title || 'Unknown Class',
+    title: 'New Announcement',
+    text: ann.text,
+    date: ann.date,
+    author: ann.authorName,
+    timestamp: ann.createdAt,
+  }));
+
   const response = ApiResponse.success({
     studentName: req.user.name,
     joinedClasses,
     combinedSchedule,
     notifications: formattedNotifications,
+    recentAnnouncements,
   });
 
   res.status(response.statusCode).json(response);

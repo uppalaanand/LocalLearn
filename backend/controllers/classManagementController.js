@@ -59,6 +59,8 @@ export const getClassManagement = asyncHandler(async (req, res, next) => {
       date: s.date,
       day: s.day,
       time: s.time,
+      startTime: s.startTime,
+      endTime: s.endTime,
       topic: s.topic,
     })),
     chat: chat.map((m) => ({
@@ -105,6 +107,57 @@ export const createAnnouncement = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * @desc    Update announcement
+ * @route   PUT /api/class-management/:id/announcements/:announcementId
+ * @access  Private (Teacher only)
+ */
+export const updateAnnouncement = asyncHandler(async (req, res, next) => {
+  const cls = await Class.findById(req.params.id);
+  if (!cls) return next(ApiError.notFound('Class not found'));
+
+  if (cls.teacher.toString() !== req.user._id.toString()) {
+    return next(ApiError.forbidden('Only the class teacher can edit announcements'));
+  }
+
+  const announcement = await Announcement.findOne({ _id: req.params.announcementId, class: cls._id });
+  if (!announcement) return next(ApiError.notFound('Announcement not found'));
+
+  announcement.text = req.body.text || announcement.text;
+  await announcement.save();
+
+  const response = ApiResponse.success({
+    id: announcement._id,
+    text: announcement.text,
+    date: announcement.date,
+    author: announcement.authorName,
+  }, 'Announcement updated');
+
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Delete announcement
+ * @route   DELETE /api/class-management/:id/announcements/:announcementId
+ * @access  Private (Teacher only)
+ */
+export const deleteAnnouncement = asyncHandler(async (req, res, next) => {
+  const cls = await Class.findById(req.params.id);
+  if (!cls) return next(ApiError.notFound('Class not found'));
+
+  if (cls.teacher.toString() !== req.user._id.toString()) {
+    return next(ApiError.forbidden('Only the class teacher can delete announcements'));
+  }
+
+  const announcement = await Announcement.findOne({ _id: req.params.announcementId, class: cls._id });
+  if (!announcement) return next(ApiError.notFound('Announcement not found'));
+
+  await Announcement.deleteOne({ _id: announcement._id });
+
+  const response = ApiResponse.success(null, 'Announcement deleted');
+  res.status(response.statusCode).json(response);
+});
+
+/**
  * @desc    Add schedule session
  * @route   POST /api/class-management/:id/schedule
  * @access  Private (Teacher only)
@@ -118,6 +171,8 @@ export const addScheduleSession = asyncHandler(async (req, res, next) => {
     date: req.body.date,
     day: req.body.day,
     time: req.body.time,
+    startTime: req.body.startTime,
+    endTime: req.body.endTime,
     topic: req.body.topic,
   });
 
@@ -126,6 +181,8 @@ export const addScheduleSession = asyncHandler(async (req, res, next) => {
     date: session.date,
     day: session.day,
     time: session.time,
+    startTime: session.startTime,
+    endTime: session.endTime,
     topic: session.topic,
   }, 'Session added');
 
@@ -147,6 +204,28 @@ export const updateScheduleSession = asyncHandler(async (req, res, next) => {
   if (!session) return next(ApiError.notFound('Session not found'));
 
   const response = ApiResponse.success(session, 'Session updated');
+  res.status(response.statusCode).json(response);
+});
+
+/**
+ * @desc    Delete schedule session
+ * @route   DELETE /api/class-management/:id/schedule/:sessionId
+ * @access  Private (Teacher only)
+ */
+export const deleteScheduleSession = asyncHandler(async (req, res, next) => {
+  const cls = await Class.findById(req.params.id);
+  if (!cls) return next(ApiError.notFound('Class not found'));
+
+  if (cls.teacher.toString() !== req.user._id.toString()) {
+    return next(ApiError.forbidden('Only the class teacher can delete sessions'));
+  }
+
+  const session = await Schedule.findOne({ _id: req.params.sessionId, class: cls._id });
+  if (!session) return next(ApiError.notFound('Session not found'));
+
+  await Schedule.deleteOne({ _id: session._id });
+
+  const response = ApiResponse.success(null, 'Session deleted');
   res.status(response.statusCode).json(response);
 });
 

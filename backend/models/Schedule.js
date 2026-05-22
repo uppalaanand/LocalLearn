@@ -17,7 +17,17 @@ const scheduleSchema = new mongoose.Schema(
     },
     time: {
       type: String,
+      required: false,
+    },
+    startTime: {
+      type: String,
       required: true,
+      default: '09:00',
+    },
+    endTime: {
+      type: String,
+      required: true,
+      default: '10:00',
     },
     topic: {
       type: String,

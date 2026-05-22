@@ -31,6 +31,17 @@ export default function ClassManagement() {
   const [editingReview, setEditingReview] = useState<any>(null);
   const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
 
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [announcementForm, setAnnouncementForm] = useState({ text: '' });
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
+  const [submittingAnnouncement, setSubmittingAnnouncement] = useState(false);
+  const [deletingAnnouncementId, setDeletingAnnouncementId] = useState<string | null>(null);
+
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({ date: '', day: 'Monday', startTime: '18:00', endTime: '19:00', topic: '' });
+  const [submittingSchedule, setSubmittingSchedule] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab') as Tab;
@@ -93,6 +104,116 @@ export default function ClassManagement() {
     }
   };
 
+  const handleSubmitAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announcementForm.text.trim()) return;
+    setSubmittingAnnouncement(true);
+    try {
+      if (editingAnnouncement) {
+        const res = await classManagementService.updateAnnouncement(id!, editingAnnouncement.id || editingAnnouncement._id, announcementForm.text);
+        setData((prev: any) => ({
+          ...prev,
+          announcements: prev.announcements.map((a: any) => 
+            (a.id || a._id) === (editingAnnouncement.id || editingAnnouncement._id) ? res.data : a
+          )
+        }));
+      } else {
+        const res = await classManagementService.createAnnouncement(id!, announcementForm.text);
+        setData((prev: any) => ({
+          ...prev,
+          announcements: [res.data, ...prev.announcements]
+        }));
+      }
+      setAnnouncementForm({ text: '' });
+      setEditingAnnouncement(null);
+      setShowAnnouncementModal(false);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error saving announcement');
+    } finally {
+      setSubmittingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async () => {
+    if (!deletingAnnouncementId) return;
+    try {
+      await classManagementService.deleteAnnouncement(id!, deletingAnnouncementId);
+      setData((prev: any) => ({
+        ...prev,
+        announcements: prev.announcements.filter((a: any) => (a.id || a._id) !== deletingAnnouncementId)
+      }));
+      setDeletingAnnouncementId(null);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error deleting announcement');
+      setDeletingAnnouncementId(null);
+    }
+  };
+
+  const handleSubmitSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingSchedule(true);
+    const timeString = `${scheduleForm.startTime} - ${scheduleForm.endTime}`;
+    const payload = {
+      ...scheduleForm,
+      time: timeString
+    };
+    try {
+      if (editingSchedule) {
+        const res = await classManagementService.updateSession(id!, editingSchedule.id || editingSchedule._id, payload);
+        setData((prev: any) => ({
+          ...prev,
+          schedule: prev.schedule.map((s: any) => 
+            (s.id || s._id) === (editingSchedule.id || editingSchedule._id) ? {
+              id: res.data._id,
+              date: res.data.date,
+              day: res.data.day,
+              time: res.data.time,
+              startTime: res.data.startTime,
+              endTime: res.data.endTime,
+              topic: res.data.topic,
+            } : s
+          )
+        }));
+      } else {
+        const res = await classManagementService.addSession(id!, payload);
+        setData((prev: any) => ({
+          ...prev,
+          schedule: [...prev.schedule, {
+            id: res.data._id,
+            date: res.data.date,
+            day: res.data.day,
+            time: res.data.time,
+            startTime: res.data.startTime,
+            endTime: res.data.endTime,
+            topic: res.data.topic,
+          }]
+        }));
+      }
+      setScheduleForm({ date: '', day: 'Monday', startTime: '18:00', endTime: '19:00', topic: '' });
+      setEditingSchedule(null);
+      setShowScheduleModal(false);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error saving session');
+    } finally {
+      setSubmittingSchedule(false);
+    }
+  };
+
+  const handleDeleteSchedule = async () => {
+    if (!deletingSessionId) return;
+    try {
+      await classManagementService.deleteSession(id!, deletingSessionId);
+      setData((prev: any) => ({
+        ...prev,
+        schedule: prev.schedule.filter((s: any) => (s.id || s._id) !== deletingSessionId)
+      }));
+      setDeletingSessionId(null);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error deleting session');
+      setDeletingSessionId(null);
+    }
+  };
+
   const handleSaveAttendance = async () => {
     const records = Object.entries(attendanceState).map(([studentId, status]) => ({ studentId, status }));
     if (records.length === 0) return;
@@ -139,7 +260,13 @@ export default function ClassManagement() {
 
       {selectedStudent && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-start mb-6"><div className="flex items-center gap-4"><div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-2xl">{selectedStudent.name.charAt(0)}</div><div><h3 className="text-xl font-bold text-gray-900">{selectedStudent.name}</h3><p className="text-sm text-gray-500">Joined Oct 2023</p></div></div><button onClick={() => setSelectedStudent(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div><div className="space-y-4">{role === 'teacher' && (<><div className="bg-gray-50 p-4 rounded-xl border border-gray-100"><h4 className="text-sm font-medium text-gray-500 mb-1">Attendance Rate</h4><p className="text-2xl font-bold text-gray-900">{selectedStudent.attendance}</p></div><div className="bg-gray-50 p-4 rounded-xl border border-gray-100"><h4 className="text-sm font-medium text-gray-500 mb-1">Payment Status</h4><span className={`px-2.5 py-1 rounded-full text-xs font-medium inline-block mt-1 ${selectedStudent.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{selectedStudent.paymentStatus}</span></div></>)}<div className="flex gap-3 pt-4"><button className="flex-1 bg-indigo-50 text-indigo-600 font-medium py-2.5 rounded-xl hover:bg-indigo-100 transition-colors">Message</button>{role === 'teacher' && (<button className="flex-1 bg-white border border-gray-200 text-gray-700 font-medium py-2.5 rounded-xl hover:bg-gray-50 transition-colors">View Full Report</button>)}</div></div></div></div>)}
 
-      {editingSchedule && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-gray-900">Edit Session</h3><button onClick={() => setEditingSchedule(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Topic</label><input type="text" defaultValue={editingSchedule.topic} className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="text" defaultValue={editingSchedule.date} className="w-full border border-gray-300 rounded-lg p-2.5" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Time</label><input type="text" defaultValue={editingSchedule.time} className="w-full border border-gray-300 rounded-lg p-2.5" /></div></div><button onClick={() => setEditingSchedule(null)} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors mt-2">Save Changes</button></div></div></div>)}
+      {showScheduleModal && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-gray-900">{editingSchedule ? 'Edit Session' : 'Add Session'}</h3><button onClick={() => { setShowScheduleModal(false); setEditingSchedule(null); setScheduleForm({ date: '', day: 'Monday', startTime: '18:00', endTime: '19:00', topic: '' }); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div><form onSubmit={handleSubmitSchedule} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Topic / Title (Optional)</label><input type="text" value={scheduleForm.topic} onChange={e => setScheduleForm({...scheduleForm, topic: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. Batting Practice" /></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Day</label><select value={scheduleForm.day} onChange={e => setScheduleForm({...scheduleForm, day: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5"><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Date</label><input type="date" required value={scheduleForm.date} onChange={e => setScheduleForm({...scheduleForm, date: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5" /></div></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label><input type="time" required value={scheduleForm.startTime} onChange={e => setScheduleForm({...scheduleForm, startTime: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5" /></div><div><label className="block text-sm font-medium text-gray-700 mb-1">End Time</label><input type="time" required value={scheduleForm.endTime} onChange={e => setScheduleForm({...scheduleForm, endTime: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5" /></div></div><button type="submit" disabled={submittingSchedule} className="w-full bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors mt-2 disabled:opacity-50 flex justify-center items-center gap-2">{submittingSchedule && <Loader2 className="h-4 w-4 animate-spin" />} Save Session</button></form></div></div>)}
+      
+      {deletingSessionId && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm"><h3 className="text-xl font-bold text-gray-900 mb-2">Delete Session</h3><p className="text-gray-500 mb-6">Are you sure you want to delete this session?</p><div className="flex gap-3"><button onClick={() => setDeletingSessionId(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors">Cancel</button><button onClick={handleDeleteSchedule} className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors">Delete</button></div></div></div>)}
+
+      {showAnnouncementModal && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-md"><div className="flex justify-between items-center mb-4"><h3 className="text-xl font-bold text-gray-900">{editingAnnouncement ? 'Edit Announcement' : 'New Post'}</h3><button onClick={() => { setShowAnnouncementModal(false); setEditingAnnouncement(null); setAnnouncementForm({text: ''}); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button></div><form onSubmit={handleSubmitAnnouncement} className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Announcement Content</label><textarea rows={4} value={announcementForm.text} onChange={e => setAnnouncementForm({text: e.target.value})} className="w-full border border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Type your announcement here..." required /></div><button type="submit" disabled={submittingAnnouncement} className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">{submittingAnnouncement && <Loader2 className="h-4 w-4 animate-spin" />} {editingAnnouncement ? 'Save Changes' : 'Post Announcement'}</button></form></div></div>)}
+
+      {deletingAnnouncementId && (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-white rounded-2xl p-6 w-full max-w-sm"><h3 className="text-xl font-bold text-gray-900 mb-2">Delete Announcement</h3><p className="text-gray-500 mb-6">Are you sure you want to delete this announcement?</p><div className="flex gap-3"><button onClick={() => setDeletingAnnouncementId(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors">Cancel</button><button onClick={handleDeleteAnnouncement} className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors">Delete</button></div></div></div>)}
 
       <div className="flex items-center gap-4 mb-6 shrink-0">
         <button onClick={() => navigate(-1)} className="p-2 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"><ChevronLeft className="h-5 w-5 text-gray-600" /></button>
@@ -154,9 +281,9 @@ export default function ClassManagement() {
       </div>
 
       <div className="flex-1 overflow-y-auto bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-        {activeTab === 'announcements' && (<div className="space-y-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Recent Announcements</h2>{role === 'teacher' && (<button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors"><Plus className="h-4 w-4" /> New Post</button>)}</div><div className="space-y-4">{data.announcements.map((ann: any) => (<div key={ann.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-3"><div className="flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{ann.author.charAt(0)}</div><div><h4 className="font-bold text-gray-900">{ann.author}</h4><span className="text-xs text-gray-500">{ann.date}</span></div></div></div><p className="text-gray-700 whitespace-pre-line">{ann.text}</p></div>))}</div></div>)}
+        {activeTab === 'announcements' && (<div className="space-y-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Recent Announcements</h2>{role === 'teacher' && (<button onClick={() => setShowAnnouncementModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors"><Plus className="h-4 w-4" /> New Post</button>)}</div><div className="space-y-4">{data.announcements.length === 0 ? (<p className="text-gray-500 text-center py-8">No announcements yet.</p>) : data.announcements.map((ann: any) => (<div key={ann.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100"><div className="flex justify-between items-start mb-3"><div className="flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">{ann.author?.charAt(0) || 'A'}</div><div><h4 className="font-bold text-gray-900">{ann.author}</h4><span className="text-xs text-gray-500">{ann.date}</span></div></div>{role === 'teacher' && (<div className="flex items-center gap-2"><button onClick={() => { setEditingAnnouncement(ann); setAnnouncementForm({text: ann.text}); setShowAnnouncementModal(true); }} className="text-gray-400 hover:text-indigo-600 transition-colors"><Edit className="h-4 w-4" /></button><button onClick={() => setDeletingAnnouncementId(ann.id || ann._id)} className="text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button></div>)}</div><p className="text-gray-700 whitespace-pre-line">{ann.text}</p></div>))}</div></div>)}
 
-        {activeTab === 'schedule' && (<div className="space-y-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Upcoming Sessions</h2>{role === 'teacher' && (<button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors"><Plus className="h-4 w-4" /> Add Session</button>)}</div><div className="space-y-4">{data.schedule.map((session: any) => (<div key={session.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-white border border-gray-200 rounded-2xl hover:border-indigo-300 transition-colors gap-4"><div className="flex items-center gap-4"><div className="flex flex-col items-center justify-center h-14 w-14 bg-indigo-50 rounded-xl text-indigo-600 shrink-0"><span className="text-xs font-bold uppercase">{session.day.substring(0, 3)}</span><span className="text-lg font-extrabold leading-none">{session.date.split(' ')[1]?.replace(',', '')}</span></div><div><h4 className="font-bold text-gray-900">{session.topic}</h4><div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Calendar className="h-4 w-4" /> {session.date} • {session.time}</div></div></div>{role === 'teacher' && (<div className="flex gap-2 w-full sm:w-auto"><button onClick={() => setEditingSchedule(session)} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">Edit</button><button onClick={() => { setActiveTab('attendance'); setIsMarkingAttendance(true); }} className="flex-1 sm:flex-none px-4 py-2 bg-indigo-50 text-indigo-600 text-sm font-medium rounded-xl hover:bg-indigo-100 transition-colors">Mark Attendance</button></div>)}</div>))}</div></div>)}
+        {activeTab === 'schedule' && (<div className="space-y-6"><div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Upcoming Sessions</h2>{role === 'teacher' && (<button onClick={() => { setEditingSchedule(null); setScheduleForm({ date: '', day: 'Monday', startTime: '18:00', endTime: '19:00', topic: '' }); setShowScheduleModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 font-medium rounded-xl hover:bg-indigo-100 transition-colors"><Plus className="h-4 w-4" /> Add Session</button>)}</div><div className="space-y-4">{data.schedule.length === 0 ? (<p className="text-gray-500 text-center py-8">No sessions scheduled.</p>) : data.schedule.map((session: any) => (<div key={session.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-white border border-gray-200 rounded-2xl hover:border-indigo-300 transition-colors gap-4"><div className="flex items-center gap-4"><div className="flex flex-col items-center justify-center h-14 w-14 bg-indigo-50 rounded-xl text-indigo-600 shrink-0"><span className="text-xs font-bold uppercase">{session.day.substring(0, 3)}</span><span className="text-lg font-extrabold leading-none">{session.date ? new Date(session.date).getDate() : session.day.substring(0, 3)}</span></div><div><h4 className="font-bold text-gray-900">{session.topic || 'Class Session'}</h4><div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Calendar className="h-4 w-4" /> {session.date} • {session.startTime} - {session.endTime}</div></div></div>{role === 'teacher' && (<div className="flex gap-2 w-full sm:w-auto"><button onClick={() => { setEditingSchedule(session); setScheduleForm({ date: session.date || '', day: session.day || 'Monday', startTime: session.startTime || '18:00', endTime: session.endTime || '19:00', topic: session.topic || '' }); setShowScheduleModal(true); }} className="p-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors"><Edit className="h-4 w-4" /></button><button onClick={() => setDeletingSessionId(session.id || session._id)} className="p-2 bg-white border border-gray-200 text-red-600 text-sm font-medium rounded-xl hover:bg-red-50 transition-colors"><Trash2 className="h-4 w-4" /></button></div>)}</div>))}</div></div>)}
 
         {activeTab === 'chat' && (<div className="flex flex-col h-full -m-6"><div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center shrink-0"><div><h2 className="font-bold text-gray-900">{data.title} Group</h2><p className="text-xs text-gray-500">{data.students.length + 1} participants</p></div>{role === 'teacher' && (<button className="text-sm font-medium text-indigo-600 hover:text-indigo-800">Mute Chat</button>)}</div><div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">{data.chat.map((msg: any) => (<div key={msg.id} className={`flex flex-col ${msg.isTeacher ? 'items-end' : 'items-start'}`}><div className="flex items-baseline gap-2 mb-1"><span className="text-xs font-medium text-gray-500">{msg.sender}</span><span className="text-[10px] text-gray-400">{msg.time}</span></div><div className={`px-4 py-2.5 rounded-2xl max-w-[80%] ${msg.isTeacher ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}><p className="text-sm">{msg.text}</p></div></div>))}</div><div className="p-4 border-t border-gray-200 bg-white shrink-0"><div className="flex items-center gap-2"><input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendMessage()} placeholder="Type a message..." className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2.5 text-sm transition-all" /><button onClick={handleSendMessage} className="p-2.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors shrink-0"><Send className="h-4 w-4" /></button></div></div></div>)}
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Calendar, Star, Bell, TrendingUp, Clock, ChevronRight, Heart, Search, Award, BarChart3, CheckCircle2, Loader2 } from 'lucide-react';
+import { BookOpen, Calendar, Star, Bell, TrendingUp, Clock, ChevronRight, Heart, Search, Award, BarChart3, CheckCircle2, Loader2, Megaphone } from 'lucide-react';
 import { studentService, classService } from '../services/dataServices';
 import { useAuth } from '../context/AuthContext';
 import { useFavorites } from '../hooks/useFavorites';
@@ -12,6 +12,7 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const [activeTab, setActiveTab] = useState<DashTab>('overview');
+  const [selectedDay, setSelectedDay] = useState('Monday');
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [discoverClasses, setDiscoverClasses] = useState<any[]>([]);
@@ -36,6 +37,10 @@ export default function StudentDashboard() {
   const joinedClasses = dashboardData?.joinedClasses || [];
   const combinedSchedule = dashboardData?.combinedSchedule || [];
   const notifications = dashboardData?.notifications || [];
+  const recentAnnouncements = dashboardData?.recentAnnouncements || [];
+  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const filteredSchedule = combinedSchedule.filter((s: any) => s.day === selectedDay).sort((a: any, b: any) => (a.startTime || '').localeCompare(b.startTime || ''));
+
   const tabs: { id: DashTab; label: string; icon: React.ElementType }[] = [
     { id: 'overview', label: 'Overview', icon: BookOpen },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
@@ -65,18 +70,41 @@ export default function StudentDashboard() {
 
       {activeTab === 'overview' && (
         <div className="space-y-8">
-          {notifications.filter((n: any) => !n.read).length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
               <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Bell className="h-5 w-5 text-indigo-600" /> Notifications</h2>
-              <div className="space-y-3">
-                {notifications.filter((n: any) => !n.read).slice(0, 3).map((n: any) => (
-                  <div key={n.id} className="flex items-start gap-4 p-4 rounded-xl border bg-indigo-50/50 border-indigo-100">
-                    <div className="mt-1 p-2 rounded-full bg-blue-100 text-blue-600"><Bell className="h-4 w-4" /></div>
-                    <div className="flex-1 min-w-0"><p className="font-medium text-gray-900">{n.title}</p><p className="text-sm text-gray-500 truncate">{n.message}</p></div>
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
-                  </div>))}
-              </div>
-            </div>)}
+              {notifications.filter((n: any) => !n.read).length > 0 ? (
+                <div className="space-y-3">
+                  {notifications.filter((n: any) => !n.read).slice(0, 5).map((n: any) => (
+                    <div key={n.id} className="flex items-start gap-4 p-4 rounded-xl border bg-indigo-50/50 border-indigo-100">
+                      <div className="mt-1 p-2 rounded-full bg-blue-100 text-blue-600"><Bell className="h-4 w-4" /></div>
+                      <div className="flex-1 min-w-0"><p className="font-medium text-gray-900">{n.title}</p><p className="text-sm text-gray-500 truncate">{n.message}</p></div>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">{n.time}</span>
+                    </div>))}
+                </div>
+              ) : (
+                <p className="text-gray-500 py-4 text-center">No new notifications.</p>
+              )}
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-600" /> Recent Announcements</h2>
+              {recentAnnouncements.length > 0 ? (
+                <div className="space-y-3">
+                  {recentAnnouncements.slice(0, 5).map((ann: any) => (
+                    <div key={ann.id} className="flex flex-col gap-2 p-4 rounded-xl border bg-indigo-50 border-indigo-100">
+                      <div className="flex justify-between items-start">
+                        <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">{ann.className}</span>
+                        <span className="text-xs text-gray-500">{ann.date}</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 line-clamp-2">{ann.text}</p>
+                    </div>))}
+                </div>
+              ) : (
+                <p className="text-gray-500 py-4 text-center">No recent announcements.</p>
+              )}
+            </div>
+          </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">My Classes ({joinedClasses.length})</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -107,17 +135,46 @@ export default function StudentDashboard() {
 
       {activeTab === 'schedule' && (
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Combined Schedule</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Combined Timetable</h2>
+          
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-6 pb-2">
+            {daysOfWeek.map(day => (
+              <button 
+                key={day} 
+                onClick={() => setSelectedDay(day)}
+                className={`px-6 py-2.5 rounded-full font-medium whitespace-nowrap transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+
           <div className="space-y-4">
-            {combinedSchedule.map((s: any) => (
-              <div key={s.id} className="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 transition-colors">
-                <div className="flex flex-col items-center justify-center h-14 w-14 bg-indigo-50 rounded-xl text-indigo-600 shrink-0">
+            {filteredSchedule.map((s: any) => (
+              <div key={s.id} className="flex items-center gap-4 p-5 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 transition-colors">
+                <div className="flex flex-col items-center justify-center h-16 w-16 bg-indigo-50 rounded-xl text-indigo-600 shrink-0">
                   <span className="text-xs font-bold uppercase">{s.day?.substring(0, 3)}</span>
-                  <span className="text-lg font-extrabold leading-none">{s.date?.split(' ')?.[1]?.replace(',', '') || ''}</span>
+                  <span className="text-lg font-extrabold leading-none">{s.date ? new Date(s.date).getDate() : s.day?.substring(0, 3)}</span>
                 </div>
-                <div className="flex-1"><h4 className="font-bold text-gray-900">{s.title}</h4><p className="text-sm text-gray-500">{s.topic} • {s.time}</p></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-full">{s.title}</span>
+                  </div>
+                  <h4 className="font-bold text-gray-900 truncate">{s.topic || 'Class Session'}</h4>
+                  <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                    <Calendar className="h-4 w-4" /> {s.date} • {s.startTime} - {s.endTime}
+                  </div>
+                </div>
+                <button onClick={() => navigate(`/class-management/${s.classId}?tab=schedule`)} className="px-4 py-2 bg-gray-50 text-indigo-600 text-sm font-medium rounded-xl hover:bg-indigo-50 transition-colors whitespace-nowrap">
+                  View
+                </button>
               </div>))}
-            {combinedSchedule.length === 0 && <p className="text-gray-500 text-center py-8">No upcoming sessions.</p>}
+            {filteredSchedule.length === 0 && (
+              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
+                <Calendar className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">No sessions scheduled for {selectedDay}.</p>
+              </div>
+            )}
           </div>
         </div>)}
 
