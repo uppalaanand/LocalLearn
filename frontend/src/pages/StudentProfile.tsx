@@ -1,3 +1,4 @@
+import { notify } from '../components/Feedback';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -5,7 +6,7 @@ import { authService } from '../services/dataServices';
 import { User as UserIcon, Mail, Phone, MapPin, Edit2, LayoutDashboard, CheckCircle, X, Save, Loader2, Calendar } from 'lucide-react';
 
 export default function StudentProfile() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   console.log(user);
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
@@ -29,17 +30,20 @@ export default function StudentProfile() {
     setError('');
     try {
       setLoading(true);
-      await authService.updateProfile({
+      const response = await authService.updateProfile({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         location: { address: formData.location },
       });
-      // Reload to update the auth context
-      window.location.reload();
+      setUser(response.data.user);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      setIsEditing(false);
+      setLoading(false);
+      notify('Profile saved successfully');
     } catch (err: any) {
       console.error('Failed to update profile', err);
-      setError(err.response?.data?.message || 'Failed to update profile. Please try again.');
+      setError(err.message || 'Failed to update profile. Please try again.');
       setLoading(false);
     }
   };
@@ -51,7 +55,7 @@ export default function StudentProfile() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-extrabold text-gray-900">My Profile</h1>
         <button
-          onClick={() => navigate('/student')}
+          onClick={() => navigate('/dashboard')}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
         >
           <LayoutDashboard className="h-5 w-5" /> Dashboard

@@ -10,55 +10,27 @@ import Footer from './Footer';
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, setRole } = useRole();
+  const { role } = useRole();
   const { user, isAuthenticated, logout } = useAuth();
 
-  const toggleRole = () => {
-    if (role === 'student') {
-      setRole('teacher');
-      navigate('/teacher');
-    } else {
-      setRole('student');
-      navigate('/student');
-    }
-  };
-
   const handleLogout = async () => {
+    socketService.disconnect();
     await logout();
-    navigate('/');
+    navigate('/', { replace: true });
   };
 
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (isAuthenticated && user) {
-      // Connect to socket if not already connected
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        socketService.connect(token);
-        const socket = socketService.getSocket();
-        
-        if (socket) {
-          socket.on('newDirectMessage', (message: any) => {
-            if (message.receiver === user._id) {
-              setUnreadCount(prev => prev + 1);
-            }
-          });
-        }
-      }
-
-      // Fetch initial unread count
-      messageService.getUnreadCount()
-        .then(res => setUnreadCount(res.data.count))
-        .catch(console.error);
-    }
-    
-    return () => {
-      const socket = socketService.getSocket();
-      if (socket) {
-        socket.off('newDirectMessage');
-      }
-    };
+    if (!isAuthenticated || !user) { setUnreadCount(0); return; }
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+    socketService.connect(token);
+    const socket = socketService.getSocket();
+    const onMessage = (message: any) => { if (message.receiver === user._id) setUnreadCount(prev => prev + 1); };
+    socket?.on('newDirectMessage', onMessage);
+    messageService.getUnreadCount().then(res => setUnreadCount(res.data.count)).catch(() => {});
+    return () => { socket?.off('newDirectMessage', onMessage); };
   }, [isAuthenticated, user]);
   
 
@@ -100,13 +72,12 @@ export default function Layout() {
 
           <div className="flex items-center gap-4">
             {isAuthenticated && (
-              <button 
-                // onClick={toggleRole}
+              <span
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
               >
                 {/* <ArrowRightLeft className="h-4 w-4" /> */}
                 Viewing as: {role === 'student' ? 'Student' : 'Teacher'}
-              </button>
+              </span>
             )}
 
             {isAuthenticated ? (
@@ -180,7 +151,7 @@ export default function Layout() {
           </>
         )}
         {isAuthenticated ? (
-          <button onClick={toggleRole} className="flex flex-col items-center gap-1 text-gray-500">
+          <button onClick={() => navigate("/dashboard")} className="flex flex-col items-center gap-1 text-gray-500">
             <ArrowRightLeft className="h-5 w-5" />
             <span className="text-[10px] font-medium">Switch Role</span>
           </button>

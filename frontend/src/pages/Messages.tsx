@@ -1,3 +1,4 @@
+import { notify } from '../components/Feedback';
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { messageService } from '../services/dataServices';
@@ -36,6 +37,7 @@ export default function Messages() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeChat, setActiveChat] = useState<Conversation['user'] | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,33 +63,21 @@ export default function Messages() {
 
   useEffect(() => {
     if (!user) return;
-    
     const token = localStorage.getItem('accessToken');
-    if (token) {
-      socketService.connect(token);
-      const socket = socketService.getSocket();
-      
-      if (socket) {
-        socket.on('newDirectMessage', (message: Message) => {
-          // If the message is for the active chat, append it
-          if (activeChat && (message.sender === activeChat._id || message.receiver === activeChat._id)) {
-            setMessages(prev => [...prev, message]);
-            if (message.sender === activeChat._id) {
-               messageService.markAsRead(activeChat._id);
-            }
-          }
-          // Always refresh conversations to update last message and unread count
-          fetchConversations();
-        });
+    if (!token) return;
+    socketService.connect(token);
+    const socket = socketService.getSocket();
+    const onDeleted = ({ id }: { id: string }) => { setMessages(prev => prev.filter(m => m._id !== id)); fetchConversations(); };
+    const onMessage = (message: Message) => {
+      if (activeChat && (message.sender === activeChat._id || message.receiver === activeChat._id)) {
+        setMessages(prev => prev.some(m => m._id === message._id) ? prev : [...prev, message]);
+        if (message.sender === activeChat._id) messageService.markAsRead(activeChat._id).catch(() => {});
       }
-    }
-    
-    return () => {
-      const socket = socketService.getSocket();
-      if (socket) {
-        socket.off('newDirectMessage');
-      }
+      fetchConversations();
     };
+    socket?.on('directMessageDeleted', onDeleted);
+    socket?.on('newDirectMessage', onMessage);
+    return () => { socket?.off('directMessageDeleted', onDeleted); socket?.off('newDirectMessage', onMessage); };
   }, [user, activeChat]);
 
   useEffect(() => {
@@ -99,7 +89,7 @@ export default function Messages() {
       const res = await messageService.getConversations();
       setConversations(res.data);
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      notify(error instanceof Error ? error.message : 'Unable to load conversations');
     } finally {
       setLoading(false);
     }
@@ -112,7 +102,7 @@ export default function Messages() {
       await messageService.markAsRead(userId);
       fetchConversations(); // refresh unread count
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      notify(error instanceof Error ? error.message : 'Unable to open conversation');
     }
   };
 
@@ -125,14 +115,16 @@ export default function Messages() {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
 
-    const socket = socketService.getSocket();
-    if (socket) {
-      socket.emit('sendDirectMessage', {
-        receiverId: activeChat._id,
-        text: newMessage
-      });
+    if (sending) return;
+    setSending(true);
+    try {
+      const res = await messageService.sendDirectMessage(activeChat._id, newMessage);
+      setMessages(prev => prev.some(m => m._id === res.data._id) ? prev : [...prev, res.data]);
       setNewMessage('');
-    }
+      fetchConversations();
+    } catch (err: any) { notify(err.message || 'Unable to send message'); }
+    finally { setSending(false); }
+
   };
 
   if (loading) {
@@ -230,6 +222,7 @@ export default function Messages() {
                   <div key={msg._id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${isMine ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-gray-900 rounded-tl-none shadow-sm border border-gray-100'}`}>
                       <p>{msg.text}</p>
+                      {isMine && <button className="text-xs underline" onClick={async () => { if (!confirm('Delete this message for everyone?')) return; try { await messageService.deleteDirectMessage(activeChat._id, msg._id); setMessages(prev => prev.filter(m => m._id !== msg._id)); fetchConversations(); } catch (err: any) { notify(err.message); } }}>Delete</button>}
                       <p className={`text-[10px] mt-1 ${isMine ? 'text-indigo-200' : 'text-gray-400'}`}>
                         {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -252,7 +245,7 @@ export default function Messages() {
                 />
                 <button
                   type="submit"
-                  disabled={!newMessage.trim()}
+                  disabled={sending || !newMessage.trim()}
                   className="px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
                   <Send className="h-5 w-5" />

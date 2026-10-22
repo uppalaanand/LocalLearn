@@ -1,3 +1,4 @@
+import { ratingLabel } from '../utils/format';
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, MapPin, Star, Filter, SlidersHorizontal, Heart, Loader2 } from 'lucide-react';
@@ -220,7 +221,7 @@ export default function SearchResults() {
                     <img src={cls.photos?.[0]} alt={cls.title} className="w-full h-full object-cover" />
                     <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">
                       <Star className="h-3 w-3 text-yellow-400 fill-current" />
-                      {cls.rating}
+                      {ratingLabel(cls.rating)}
                     </div>
                   </div>
                   

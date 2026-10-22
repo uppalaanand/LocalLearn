@@ -8,6 +8,9 @@ interface User {
   role: 'student' | 'teacher' | 'admin';
   phone: string;
   avatar: string;
+  isVerified?: boolean;
+  createdAt?: string;
+  location?: { address?: string };
 }
 
 interface AuthContextType {
@@ -37,6 +40,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     window.addEventListener('authChange', handleAuthChange);
     return () => window.removeEventListener('authChange', handleAuthChange);
+  }, []);
+
+  useEffect(() => {
+    // Hydrate older persisted sessions whose login response omitted account dates.
+    if (authService.getCurrentUser() && !authService.getCurrentUser().createdAt) {
+      authService.getMe().then(res => { localStorage.setItem('user', JSON.stringify(res.data.user)); setUser(res.data.user); }).catch(() => {});
+    }
   }, []);
 
   const login = async (email: string, password: string) => {

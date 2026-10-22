@@ -1,7 +1,7 @@
 import express from 'express';
 import {
   getClasses, getFeaturedClasses, getClassById,
-  createClass, updateClass, enrollInClass,
+  createClass, updateClass, deleteClass, enrollInClass,
   createJoinRequest, getJoinStatus,
   addReview, getReviews, updateReview, deleteReview,
 } from '../controllers/classController.js';
@@ -43,6 +43,8 @@ router.get('/:id/reviews', getReviews);
 // Protected routes (teacher class CRUD)
 router.post('/', protect, authorize('teacher', 'admin'), uploadPhotos, parseFormFields, validate(createClassSchema), createClass);
 router.put('/:id', protect, authorize('teacher', 'admin'), uploadPhotos, parseFormFields, validate(updateClassSchema), updateClass);
+
+router.delete('/:id', protect, authorize('teacher'), deleteClass);
 
 // Student routes
 router.post('/:id/enroll', protect, authorize('student'), enrollInClass);

@@ -1,3 +1,4 @@
+import { weekday } from '../utils/schedule.js';
 import Enrollment from '../models/Enrollment.js';
 import Class from '../models/Class.js';
 import Schedule from '../models/Schedule.js';
@@ -24,7 +25,7 @@ export const getStudentDashboard = asyncHandler(async (req, res) => {
     .lean();
 
   const joinedClasses = await Promise.all(
-    enrollments.map(async (enrollment) => {
+    enrollments.filter(e => e.class?.isActive).map(async (enrollment) => {
       const cls = enrollment.class;
       const teacher = await User.findById(cls.teacher);
       const assignments = await Assignment.find({ class: cls._id, student: studentId })
@@ -44,7 +45,8 @@ export const getStudentDashboard = asyncHandler(async (req, res) => {
         nextSession: 'Today, ' + cls.time?.split('-')[0]?.trim() || '5:00 PM',
         attendance: enrollment.attendance,
         grade: enrollment.grade,
-        paymentStatus: enrollment.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+        membershipStatus: enrollment.status === 'active' ? 'Active member' : enrollment.status,
+        paymentStatus: cls.price === 0 ? 'Free' : enrollment.paymentStatus === 'paid' ? 'Paid' : 'Pending',
         progress: enrollment.progress,
         assignments: assignments.map((a) => ({
           id: a._id,
@@ -61,20 +63,20 @@ export const getStudentDashboard = asyncHandler(async (req, res) => {
   );
 
   // Get combined schedule
-  const classIds = enrollments.map((e) => e.class._id);
+  const classIds = enrollments.filter(e => e.class?.isActive).map((e) => e.class._id);
   const schedules = await Schedule.find({ class: { $in: classIds } })
     .sort({ createdAt: 1 })
     .lean();
 
   const combinedSchedule = await Promise.all(
     schedules.map(async (session) => {
-      const cls = await Class.findById(session.class);
+      const cls = enrollments.find(e => String(e.class._id) === String(session.class))?.class;
       return {
         id: session._id,
         classId: session.class,
         title: cls?.title || '',
         date: session.date,
-        day: session.day,
+        day: weekday(session.date),
         time: session.time,
         startTime: session.startTime,
         endTime: session.endTime,

@@ -1,3 +1,4 @@
+import { notify } from '../components/Feedback';
 /**
  * Centralized Axios API client with JWT interceptors
  */
@@ -5,9 +6,10 @@
 // const API_BASE_URL = '/api';
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Token storage
+const inflight = new Map<string, Promise<any>>();
 let accessToken: string | null = localStorage.getItem('accessToken');
 
 // Event for auth state changes
@@ -17,6 +19,7 @@ const authChangeEvent = new Event('authChange');
  * Set the access token
  */
 export const setAccessToken = (token: string | null) => {
+  inflight.clear();
   accessToken = token;
   if (token) {
     localStorage.setItem('accessToken', token);
@@ -34,11 +37,12 @@ export const getAccessToken = () => accessToken;
 /**
  * Core fetch wrapper with auth headers and error handling
  */
-async function apiFetch<T>(
+async function rawApiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  if (options.method && options.method !== 'GET') inflight.clear();
 
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
@@ -88,10 +92,24 @@ async function apiFetch<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(response.status, errorData.message || 'Request failed', errorData.errors);
+    throw new ApiError(response.status, errorData.errors?.map((e: any) => e.message).join('; ') || errorData.message || 'Request failed', errorData.errors);
   }
 
   return response.json();
+}
+
+async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  try {
+    const result = await rawApiFetch<T>(endpoint, options);
+    if (options.method && options.method !== 'GET' && !endpoint.endsWith('/read') && !endpoint.includes('/auth/')) {
+      const message = (result as any)?.message;
+      if (message) notify(message);
+    }
+    return result;
+  } catch (error) {
+    notify(error instanceof Error ? error.message : 'Request failed. Please try again.');
+    throw error;
+  }
 }
 
 /**
@@ -135,7 +153,13 @@ export class ApiError extends Error {
 
 // Convenience methods
 export const api = {
-  get: <T>(endpoint: string) => apiFetch<T>(endpoint),
+  get: <T>(endpoint: string): Promise<T> => {
+    const key = `${accessToken || 'guest'}:${endpoint}`;
+    if (inflight.has(key)) return inflight.get(key)!;
+    const request = apiFetch<T>(endpoint).finally(() => { if (inflight.get(key) === request) inflight.delete(key); });
+    inflight.set(key, request);
+    return request;
+  },
 
   post: <T>(endpoint: string, data?: any) =>
     apiFetch<T>(endpoint, {

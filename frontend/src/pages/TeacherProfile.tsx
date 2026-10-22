@@ -1,7 +1,9 @@
+import { countLabel, ratingLabel } from '../utils/format';
+import { notify } from '../components/Feedback';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Star, Award, CheckCircle, ChevronLeft, MessageSquare, Heart, Loader2, Edit2, Save, X } from 'lucide-react';
-import { teacherService } from '../services/dataServices';
+import { teacherService, authService } from '../services/dataServices';
 import { useFavorites } from '../hooks/useFavorites';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,7 +11,7 @@ export default function TeacherProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useFavorites();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
 
   const [teacher, setTeacher] = useState<any>(null);
   const [teacherClasses, setTeacherClasses] = useState<any[]>([]);
@@ -73,10 +75,18 @@ export default function TeacherProfile() {
         skills: formData.skills.split(',').map((s: string) => s.trim()).filter(Boolean),
         certifications: formData.certifications.split(',').map((s: string) => s.trim()).filter(Boolean),
       });
-      window.location.reload();
+      const updated = await teacherService.getTeacherById(id!);
+      setTeacher(updated.data);
+      setTeacherClasses(updated.data.classes || []);
+      const me = await authService.getMe();
+      setUser(me.data.user);
+      localStorage.setItem('user', JSON.stringify(me.data.user));
+      setIsEditing(false);
+      setUpdateLoading(false);
+      notify('Profile saved successfully');
     } catch (err: any) {
       console.error('Failed to update profile', err);
-      setError(err.response?.data?.message || 'Failed to update profile');
+      setError(err.message || 'Failed to update profile');
       setUpdateLoading(false);
     }
   };
@@ -87,6 +97,9 @@ export default function TeacherProfile() {
 
   return (
     <div className="max-w-4xl mx-auto pb-24">
+      <p className="text-sm text-gray-500 mb-3">{teacher?.createdAt ? `Joined ${new Date(teacher.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : 'Join date unavailable'}</p>
+      {isOwner && <button className="text-sm underline mb-4" onClick={async () => { try { await teacherService.updateProfile({ featured: false }); notify('Your profile is no longer featured'); } catch (err: any) { notify(err.message); } }}>Remove my profile from featured teachers</button>}
+      <button onClick={() => navigate("/dashboard")} className="text-indigo-600 mr-6">Dashboard</button>
       <button 
         onClick={() => navigate(-1)} 
         className="flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 mb-8"
@@ -134,8 +147,8 @@ export default function TeacherProfile() {
               <div className="flex flex-wrap items-center gap-6 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                  <span className="font-bold text-gray-900">{teacher.rating}</span>
-                  <span>({teacher.reviewsCount} reviews)</span>
+                  <span className="font-bold text-gray-900">{ratingLabel(teacher.rating)}</span>
+                  <span>{`(${countLabel(teacher.reviewsCount, "review", "reviews")})`}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <MapPin className="h-5 w-5 text-gray-400" />
@@ -255,7 +268,7 @@ export default function TeacherProfile() {
                     
                     <div className="flex flex-wrap gap-y-2 gap-x-4 text-sm text-gray-600">
                       <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {cls.distance}</span>
-                      <span className="flex items-center gap-1"><Star className="h-4 w-4 text-yellow-400 fill-current" /> {cls.rating}</span>
+                      <span className="flex items-center gap-1"><Star className="h-4 w-4 text-yellow-400 fill-current" /> {ratingLabel(cls.rating)}</span>
                     </div>
                   </div>
                   

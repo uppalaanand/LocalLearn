@@ -1,3 +1,5 @@
+import { countLabel, ratingLabel } from '../utils/format';
+import { notify } from '../components/Feedback';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, Star, Calendar, Clock, Users, Award, ShieldCheck, ChevronLeft, MessageCircle, Heart, Bell, Loader2 } from 'lucide-react';
@@ -62,9 +64,9 @@ export default function ClassDetail() {
     try {
       await classService.joinRequest(id!);
       setJoinStatus('pending');
-      alert('Join request sent successfully! Pending teacher approval.');
+      notify('Join request sent successfully! Pending teacher approval.');
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to send request');
+      notify(err.message || err.message || 'Failed to send request');
     } finally {
       setEnrolling(false);
     }
@@ -80,9 +82,9 @@ export default function ClassDetail() {
       await classService.bookTrial(id!, { selectedSlot: selectedTrialSlot });
       setTrialStatus('pending');
       setShowTrialModal(false);
-      alert('Trial request sent successfully!');
+      notify('Trial request sent successfully!');
     } catch (err: any) {
-      alert(err.response?.data?.message || err.message || 'Failed to book trial');
+      notify(err.message || err.message || 'Failed to book trial');
     } finally {
       setBookingTrial(false);
     }
@@ -142,17 +144,17 @@ export default function ClassDetail() {
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
               <div className="flex items-center gap-1 font-medium text-gray-900">
                 <Star className="h-5 w-5 text-yellow-400 fill-current" />
-                {cls.rating} <span className="text-gray-500 font-normal">({reviews.length} reviews)</span>
+                {ratingLabel(cls.rating)} <span className="text-gray-500 font-normal">{`(${countLabel(reviews.length, "review", "reviews")})`}</span>
               </div>
               <span className="text-gray-300">•</span>
               <div className="flex items-center gap-1">
                 <MapPin className="h-5 w-5 text-gray-400" />
-                {cls.distance} away
+                {`${cls.distance} away`}
               </div>
               <span className="text-gray-300">•</span>
               <div className="flex items-center gap-1">
                 <Users className="h-5 w-5 text-gray-400" />
-                {cls.studentsCount}/{cls.maxStudents} enrolled
+                {`${cls.studentsCount}/${cls.maxStudents} enrolled`}
               </div>
             </div>
           </div>
@@ -165,7 +167,7 @@ export default function ClassDetail() {
               <img src={teacher.photo} alt={teacher.name} className="h-16 w-16 rounded-full object-cover" />
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Hosted by {teacher.name}</h3>
-                <p className="text-sm text-gray-500">{teacher.experience} experience • {teacher.skills?.join(', ')}</p>
+                <p className="text-sm text-gray-500">{`${teacher.experience} experience`} • {teacher.skills?.join(', ')}</p>
               </div>
             </div>
             <ChevronLeft className="h-5 w-5 text-gray-400 rotate-180" />
@@ -224,7 +226,7 @@ export default function ClassDetail() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                 <Star className="h-6 w-6 text-yellow-400 fill-current" />
-                {cls.rating} ({reviews.length} reviews)
+                {ratingLabel(cls.rating)} {`(${countLabel(reviews.length, "review", "reviews")})`}
               </h2>
             </div>
             <div className="space-y-6">
@@ -276,7 +278,7 @@ export default function ClassDetail() {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-200">
                   <p className="text-xs text-indigo-600 font-medium text-center">
-                    {cls.pricingTiers.currentEnrolled} students already enrolled!
+                    {countLabel(cls.pricingTiers.currentEnrolled, "student", "students")}   already enrolled!
                   </p>
                 </div>
               </div>
@@ -309,7 +311,7 @@ export default function ClassDetail() {
                 </button>
               )}
               
-              <button className="w-full flex items-center justify-center gap-2 text-gray-700 font-medium py-3 hover:bg-gray-50 rounded-xl transition-colors">
+              <button onClick={() => { if (!isAuthenticated) { navigate("/login"); return; } navigate(`/messages?userId=${cls.teacher.id}&name=${encodeURIComponent(cls.teacher.name)}`); }} className="w-full flex items-center justify-center gap-2 text-gray-700 font-medium py-3 hover:bg-gray-50 rounded-xl transition-colors">
                 <MessageCircle className="h-5 w-5" /> Contact Teacher
               </button>
             </div>
@@ -321,7 +323,7 @@ export default function ClassDetail() {
               </div>
               <div className="flex items-start gap-3">
                 <Users className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
-                <p className="text-sm text-gray-600">Only {cls.maxStudents - cls.studentsCount} spots left in this batch.</p>
+                <p className="text-sm text-gray-600">{`Only ${Math.max(0, cls.maxStudents - cls.studentsCount)} ${cls.maxStudents - cls.studentsCount === 1 ? "spot" : "spots"} left in this batch.`}</p>
               </div>
             </div>
           </div>

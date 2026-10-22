@@ -7,6 +7,7 @@ class SocketService {
   private socket: Socket | null = null;
 
   connect(token: string) {
+    if (this.socket && (this.socket.auth as { token?: string }).token === token) return;
     if (this.socket) {
       this.socket.disconnect();
     }

@@ -1,3 +1,4 @@
+import { countLabel, ratingLabel } from '../utils/format';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Star, ChevronRight, Heart, Loader2 } from 'lucide-react';
@@ -5,7 +6,8 @@ import { categoryService, classService, teacherService } from '../services/dataS
 import { useFavorites } from '../hooks/useFavorites';
 
 // Helper to map icon names to actual components
-import * as Icons from 'lucide-react';
+import { HelpCircle, Music, Dumbbell, Palette, BookOpen, Code, Languages, Trophy, GraduationCap, Camera } from 'lucide-react';
+const Icons: Record<string, React.ElementType> = { HelpCircle, Music, Dumbbell, Palette, BookOpen, Code, Languages, Trophy, GraduationCap, Camera };
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +18,7 @@ export default function Home() {
   const [categories, setCategories] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export default function Home() {
         setClasses((classRes.data || []).slice(0, 3));
         setTeachers((teacherRes.data || []).slice(0, 6));
       } catch (error) {
-        console.error('Error fetching home data:', error);
+        setLoadError('Unable to load classes. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -45,13 +48,6 @@ export default function Home() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-12 pb-16">
@@ -85,8 +81,8 @@ export default function Home() {
 
         <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mt-4">
           <MapPin className="h-4 w-4" />
-          <span>Showing classes within <strong>5 km</strong> of your location</span>
-          <button className="text-indigo-600 hover:underline ml-2">Change</button>
+          <span>Browse classes and refine your search</span>
+          <button onClick={() => navigate("/search")} className="text-indigo-600 hover:underline ml-2">Filters</button>
         </div>
       </section>
 
@@ -144,7 +140,7 @@ export default function Home() {
                   <img src={cls.photos?.[0]} alt={cls.title} className="w-full h-full object-cover" />
                   <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm">
                     <Star className="h-3 w-3 text-yellow-400 fill-current" />
-                    {cls.rating}
+                    {ratingLabel(cls.rating)}
                   </div>
                   <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
@@ -192,8 +188,8 @@ export default function Home() {
               <p className="text-sm text-indigo-600 font-medium mb-2">{teacher.skills?.[0]}</p>
               <div className="flex items-center justify-center gap-1 text-sm text-gray-500 mb-4">
                 <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                <span className="font-medium text-gray-700">{teacher.rating}</span>
-                <span>({teacher.reviewsCount} reviews)</span>
+                <span className="font-medium text-gray-700">{ratingLabel(teacher.rating)}</span>
+                <span>{`(${countLabel(teacher.reviewsCount, "review", "reviews")})`}</span>
               </div>
               <p className="text-sm text-gray-500 line-clamp-2">{teacher.about}</p>
             </div>

@@ -1,3 +1,5 @@
+import Class from '../models/Class.js';
+import Enrollment from '../models/Enrollment.js';
 import Message from '../models/Message.js';
 import DirectMessage from '../models/DirectMessage.js';
 import { verifyAccessToken } from '../utils/tokenUtils.js';
@@ -36,10 +38,17 @@ export const initChatSocket = (io) => {
     console.log(`📢 ${socket.user.name} joined personal room: user_${socket.user._id}`);
 
     // Join a class chat room
-    socket.on('joinRoom', (classId) => {
-      socket.join(`class_${classId}`);
-      console.log(`📢 ${socket.user.name} joined room: class_${classId}`);
+    const canAccess = async classId => {
+      const cls = await Class.findById(classId);
+      if (!cls) throw new Error('Class not found');
+      if (String(cls.teacher) !== String(socket.user._id) && !await Enrollment.exists({ class: classId, student: socket.user._id, status: 'active' })) throw new Error('Membership required');
+      return cls;
+    };
+    socket.on('joinRoom', async classId => {
+      try { await canAccess(classId); socket.join(`class_${classId}`); }
+      catch { socket.emit('error', { message: 'Unable to join this class chat' }); }
     });
+
 
     // Leave a class chat room
     socket.on('leaveRoom', (classId) => {
@@ -50,6 +59,9 @@ export const initChatSocket = (io) => {
     // Handle sending a message
     socket.on('sendMessage', async ({ classId, text }) => {
       try {
+        const cls = await canAccess(classId);
+        if (cls.chatMuted && String(cls.teacher) !== String(socket.user._id)) throw new Error('Chat is muted');
+        if (typeof text !== 'string' || !text.trim()) throw new Error('Message required');
         const message = await Message.create({
           class: classId,
           sender: socket.user._id,
