@@ -64,6 +64,7 @@ export const register = asyncHandler(async (req, res, next) => {
       role: user.role,
       phone: user.phone,
       avatar: user.avatar,
+      createdAt: user.createdAt,
       location: user.location,
     },
     accessToken,
@@ -117,6 +118,7 @@ export const login = asyncHandler(async (req, res, next) => {
       phone: user.phone,
       location: user.location,
       avatar: user.avatar,
+      createdAt: user.createdAt,
     },
     accessToken,
   }, 'Login successful');
@@ -209,10 +211,10 @@ export const getMe = asyncHandler(async (req, res) => {
       role: user.role,
       phone: user.phone,
       avatar: user.avatar,
+      createdAt: user.createdAt,
       location: user.location,
       favorites: user.favorites,
       isVerified: user.isVerified,
-      createdAt: user.createdAt,
     },
     teacherProfile,
   });

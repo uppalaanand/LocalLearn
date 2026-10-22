@@ -85,9 +85,10 @@ export const getConversations = asyncHandler(async (req, res) => {
  * @route   GET /api/messages/:userId
  * @access  Private
  */
-export const getDirectMessages = asyncHandler(async (req, res) => {
+export const getDirectMessages = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
   const otherUserId = req.params.userId;
+  if (!await User.exists({ _id: otherUserId })) return next(ApiError.notFound('User not found'));
 
   const messages = await DirectMessage.find({
     $or: [
@@ -141,3 +142,20 @@ export default {
   markAsRead,
   getUnreadCount,
 };
+
+export const sendDirectMessage = asyncHandler(async (req, res, next) => {
+  const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+  if (!text || text.length > 2000) return next(ApiError.badRequest('Message must contain 1 to 2000 characters'));
+  if (!await User.exists({ _id: req.params.userId })) return next(ApiError.notFound('Recipient not found'));
+  const message = await DirectMessage.create({ sender: req.user._id, receiver: req.params.userId, text });
+  const io = req.app?.get('io');
+  io?.to(`user_${req.params.userId}`).to(`user_${req.user._id}`).emit('newDirectMessage', message);
+  res.status(201).json(ApiResponse.created(message, 'Message sent'));
+});
+export const deleteDirectMessage = asyncHandler(async (req, res, next) => {
+  const message = await DirectMessage.findOne({ _id: req.params.messageId, sender: req.user._id, receiver: req.params.userId });
+  if (!message) return next(ApiError.notFound('Your message was not found'));
+  await message.deleteOne();
+  req.app?.get('io')?.to(`user_${message.receiver}`).to(`user_${message.sender}`).emit('directMessageDeleted', { id: message._id });
+  res.json(ApiResponse.success(null, 'Message deleted'));
+});

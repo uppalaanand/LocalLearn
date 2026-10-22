@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Class from '../models/Class.js';
 import TeacherProfile from '../models/TeacherProfile.js';
 import Review from '../models/Review.js';
@@ -78,21 +79,13 @@ export const getClasses = asyncHandler(async (req, res) => {
     Class.countDocuments(query),
   ]);
 
-  // Attach teacher profile data
-  const classesWithTeacher = await Promise.all(
-    classes.map(async (cls) => {
-      const teacherProfile = await TeacherProfile.findOne({ user: cls.teacher._id }).lean();
-      return {
-        ...cls,
-        id: cls._id,
-        teacherId: cls.teacher._id,
-        teacherName: cls.teacher.name,
-        teacherPhoto: teacherProfile?.photo || cls.teacher.avatar || '',
-        teacherRating: teacherProfile?.rating || 0,
-        teacherReviewsCount: teacherProfile?.reviewsCount || 0,
-      };
-    })
-  );
+  const profiles = await TeacherProfile.find({ user: { $in: classes.map(cls => cls.teacher?._id).filter(Boolean) } }).lean();
+  const profileByUser = new Map(profiles.map(p => [String(p.user), p]));
+  const classesWithTeacher = classes.filter(cls => cls.teacher).map(cls => {
+    const profile = profileByUser.get(String(cls.teacher._id));
+    return { ...cls, id: cls._id, teacherId: cls.teacher._id, teacherName: cls.teacher.name,
+      teacherPhoto: profile?.photo || cls.teacher.avatar || '', teacherRating: profile?.rating || 0, teacherReviewsCount: profile?.reviewsCount || 0 };
+  });
 
   const response = ApiResponse.success({
     classes: classesWithTeacher,
@@ -125,20 +118,10 @@ export const getFeaturedClasses = asyncHandler(async (req, res) => {
     .limit(6)
     .lean();
 
-  const classesWithTeacher = await Promise.all(
-    classes.map(async (cls) => {
-      const teacherProfile = await TeacherProfile.findOne({ user: cls.teacher._id }).lean();
-      const reviews = await Review.find({ class: cls._id }).lean();
-      return {
-        ...cls,
-        id: cls._id,
-        teacherId: cls.teacher._id,
-        teacherName: cls.teacher.name,
-        teacherPhoto: teacherProfile?.photo || '',
-        reviews,
-      };
-    })
-  );
+  const profiles = await TeacherProfile.find({ user: { $in: classes.map(cls => cls.teacher?._id).filter(Boolean) } }).lean();
+  const profileByUser = new Map(profiles.map(p => [String(p.user), p]));
+  const classesWithTeacher = classes.filter(cls => cls.teacher).map(cls => ({ ...cls, id: cls._id,
+    teacherId: cls.teacher._id, teacherName: cls.teacher.name, teacherPhoto: profileByUser.get(String(cls.teacher._id))?.photo || '' }));
 
   // Cache for 5 minutes
   cacheManager.set('featured_classes', classesWithTeacher, 300);
@@ -161,15 +144,12 @@ export const getClassById = asyncHandler(async (req, res, next) => {
     return next(ApiError.notFound('Class not found'));
   }
 
-  // Get teacher profile
-  const teacherProfile = await TeacherProfile.findOne({ user: cls.teacher._id }).lean();
-
-  // Get reviews
-  const reviews = await Review.find({ class: cls._id }).sort({ createdAt: -1 }).lean();
-
-  // Get announcements
   const Announcement = (await import('../models/Announcement.js')).default;
-  const announcements = await Announcement.find({ class: cls._id }).sort({ createdAt: -1 }).lean();
+  const [teacherProfile, reviews, announcements] = await Promise.all([
+    TeacherProfile.findOne({ user: cls.teacher._id }).lean(),
+    Review.find({ class: cls._id }).sort({ createdAt: -1 }).lean(),
+    Announcement.find({ class: cls._id }).sort({ createdAt: -1 }).lean(),
+  ]);
 
   const classData = {
     ...cls,
@@ -229,6 +209,7 @@ export const createClass = asyncHandler(async (req, res) => {
 
   // Invalidate caches
   cacheManager.delByPrefix('featured_classes');
+  cacheManager.delByPrefix('top_teachers');
 
   const response = ApiResponse.created(newClass, 'Class created successfully');
   res.status(response.statusCode).json(response);
@@ -264,6 +245,7 @@ export const updateClass = asyncHandler(async (req, res, next) => {
   });
 
   cacheManager.delByPrefix('featured_classes');
+  cacheManager.delByPrefix('top_teachers');
 
   const response = ApiResponse.success(cls, 'Class updated successfully');
   res.status(response.statusCode).json(response);
@@ -308,6 +290,7 @@ export const enrollInClass = asyncHandler(async (req, res, next) => {
   await cls.save();
 
   cacheManager.delByPrefix('featured_classes');
+  cacheManager.delByPrefix('top_teachers');
 
   const response = ApiResponse.created(enrollment, 'Enrolled successfully');
   res.status(response.statusCode).json(response);
@@ -490,4 +473,27 @@ export const deleteReview = asyncHandler(async (req, res, next) => {
 
   const response = ApiResponse.success(null, 'Review deleted successfully');
   res.status(response.statusCode).json(response);
+});
+
+// Delete related records atomically; financial history is retained but no longer public.
+export const deleteClass = asyncHandler(async (req, res, next) => {
+  const cls = await Class.findById(req.params.id);
+  if (!cls) return next(ApiError.notFound('Class not found'));
+  if (cls.teacher.toString() !== req.user._id.toString()) return next(ApiError.forbidden('Only the owning teacher can delete this class'));
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      for (const name of ['Schedule', 'Announcement', 'Enrollment', 'Message', 'JoinRequest', 'TrialBooking', 'Attendance', 'Assignment', 'Review']) {
+        const Model = (await import(`../models/${name}.js`)).default;
+        await Model.deleteMany({ class: cls._id }, { session });
+      }
+      const Notification = (await import('../models/Notification.js')).default;
+      await Notification.deleteMany({ classId: cls._id }, { session });
+      await User.updateMany({ favorites: cls._id }, { $pull: { favorites: cls._id } }, { session });
+      await Class.deleteOne({ _id: cls._id }, { session });
+    });
+  } finally { await session.endSession(); }
+  cacheManager.delByPrefix('featured_classes');
+  cacheManager.delByPrefix('top_teachers');
+  res.json(ApiResponse.success(null, 'Class deleted successfully'));
 });

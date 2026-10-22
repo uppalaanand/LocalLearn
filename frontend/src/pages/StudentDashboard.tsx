@@ -1,3 +1,4 @@
+import { ratingLabel } from '../utils/format';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Calendar, Star, Bell, TrendingUp, Clock, ChevronRight, Heart, Search, Award, BarChart3, CheckCircle2, Loader2, Megaphone } from 'lucide-react';
@@ -112,7 +113,7 @@ export default function StudentDashboard() {
                 <div key={cls.classId} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/class-management/${cls.classId}`)}>
                   <div className="flex justify-between items-start mb-4">
                     <div><h3 className="text-lg font-bold text-gray-900">{cls.title}</h3><p className="text-sm text-gray-500">{cls.teacherName}</p></div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${cls.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{cls.paymentStatus}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${cls.paymentStatus === 'Paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{cls.membershipStatus} · Payment: {cls.paymentStatus}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div className="text-center p-3 bg-gray-50 rounded-xl"><p className="text-xs text-gray-500 mb-1">Attendance</p><p className="text-lg font-bold text-gray-900">{cls.attendance}</p></div>
@@ -201,7 +202,7 @@ export default function StudentDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {discoverClasses.map((cls: any) => (
               <div key={cls._id || cls.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate(`/class/${cls._id || cls.id}`)}>
-                <div className="relative h-40"><img src={cls.photos?.[0]} alt={cls.title} className="w-full h-full object-cover" /><div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><Star className="h-3 w-3 text-yellow-400 fill-current" />{cls.rating}</div></div>
+                <div className="relative h-40"><img src={cls.photos?.[0]} alt={cls.title} className="w-full h-full object-cover" /><div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm"><Star className="h-3 w-3 text-yellow-400 fill-current" />{ratingLabel(cls.rating)}</div></div>
                 <div className="p-4"><h3 className="font-bold text-gray-900 mb-1">{cls.title}</h3><p className="text-sm text-gray-500 mb-3 line-clamp-2">{cls.description}</p><div className="flex justify-between items-center"><span className="font-bold text-gray-900">₹{cls.price}<span className="text-xs text-gray-500 font-normal">/{cls.priceUnit}</span></span><span className="text-xs text-indigo-600 font-medium">View →</span></div></div>
               </div>))}
           </div>

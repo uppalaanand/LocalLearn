@@ -1,20 +1,22 @@
+import { countLabel } from '../utils/format';
+import { notify } from '../components/Feedback';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, Users, DollarSign, MessageSquare, Plus, ChevronRight, Settings, Loader2, BookOpen, Check, X, Megaphone, Calendar } from 'lucide-react';
-import { teacherDashService, classService, teacherService } from '../services/dataServices';
+import { teacherDashService, classService, teacherService, authService } from '../services/dataServices';
 import { useAuth } from '../context/AuthContext';
 
 type TeacherTab = 'overview' | 'schedule' | 'create' | 'profile' | 'requests';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [activeTab, setActiveTab] = useState<TeacherTab>('overview');
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [loading, setLoading] = useState(true);
   const [dashData, setDashData] = useState<any>(null);
   const [creating, setCreating] = useState(false);
-  const [newClass, setNewClass] = useState({ title: '', description: '', category: 'sports', price: 2000, schedule: '', time: '', ageGroup: '', skillLevel: 'All Levels', maxStudents: 50, trialAvailable: false, trialPrice: 0, trialSlots: '' });
+  const [newClass, setNewClass] = useState({ title: '', description: '', category: 'sports', price: '2000', schedule: '', time: '', ageGroup: '', skillLevel: 'All Levels', maxStudents: 50, trialAvailable: false, trialPrice: 0, trialSlots: '' });
   const [newClassPhotos, setNewClassPhotos] = useState<File[]>([]);
   const [profileData, setProfileData] = useState({ name: '', email: '', phone: '', experience: '', skills: '', certifications: '', about: '', location: '' });
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
@@ -23,20 +25,23 @@ export default function TeacherDashboard() {
   const [editingClassData, setEditingClassData] = useState<any>(null);
   const [editClassPhotos, setEditClassPhotos] = useState<File[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [savingClass, setSavingClass] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dashRes, reqsRes, trialsRes] = await Promise.all([
+        const [dashRes, reqsRes, trialsRes, meRes] = await Promise.all([
           teacherDashService.getDashboard(),
           teacherDashService.getJoinRequests(),
-          teacherDashService.getTrialRequests().catch(() => ({ data: [] }))
+          teacherDashService.getTrialRequests().catch(() => ({ data: [] })),
+          authService.getMe()
         ]);
         setDashData(dashRes.data);
         setJoinRequests(reqsRes.data);
         setTrialRequests(trialsRes.data);
-        if (user) setProfileData(p => ({ ...p, name: user.name, email: user.email, phone: user.phone || '' }));
+        const profile = meRes.data.teacherProfile || {};
+        if (user) setProfileData({ name: user.name, email: user.email, phone: user.phone || '', experience: profile.experience || '', skills: (profile.skills || []).join(', '), certifications: (profile.certifications || []).join(', '), about: profile.about || '', location: profile.locationName || '' });
       } catch (error) { console.error('Error:', error); }
       finally { setLoading(false); }
     };
@@ -45,6 +50,8 @@ export default function TeacherDashboard() {
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating) return;
+    if (newClass.price.trim() === '' || !Number.isFinite(Number(newClass.price)) || Number(newClass.price) < 0) { notify('Price must be a non-negative number'); return; }
     setCreating(true);
     try {
       const formData = new FormData();
@@ -55,58 +62,63 @@ export default function TeacherDashboard() {
         formData.append('photos', photo);
       });
       await classService.createClass(formData);
-      alert('Class created successfully!');
+      notify('Class created successfully!');
       setActiveTab('overview');
       const res = await teacherDashService.getDashboard();
       setDashData(res.data);
-    } catch (err: any) { alert(err.message || 'Failed to create class'); }
+    } catch (err: any) { notify(err.message || 'Failed to create class'); }
     finally { setCreating(false); }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingProfile) return;
+    setSavingProfile(true);
     try {
       await teacherService.updateProfile({
         ...profileData,
         skills: profileData.skills.split(',').map(s => s.trim()).filter(Boolean),
         certifications: profileData.certifications.split(',').map(s => s.trim()).filter(Boolean),
       });
-      alert('Profile updated!');
-    } catch (err: any) { alert(err.message || 'Failed to update'); }
+      const me = await authService.getMe();
+      localStorage.setItem('user', JSON.stringify(me.data.user));
+      setUser(me.data.user);
+      notify('Profile updated!');
+    } catch (err: any) { notify(err.message || 'Failed to update'); } finally { setSavingProfile(false); }
   };
 
   const handleAcceptRequest = async (id: string) => {
     try {
       await teacherDashService.acceptJoinRequest(id);
       setJoinRequests(prev => prev.filter(r => r.id !== id));
-      alert('Request accepted!');
+      notify('Request accepted!');
       const dashRes = await teacherDashService.getDashboard();
       setDashData(dashRes.data);
-    } catch (err: any) { alert(err.message || 'Failed to accept'); }
+    } catch (err: any) { notify(err.message || 'Failed to accept'); }
   };
 
   const handleRejectRequest = async (id: string) => {
     try {
       await teacherDashService.rejectJoinRequest(id);
       setJoinRequests(prev => prev.filter(r => r.id !== id));
-      alert('Request rejected');
-    } catch (err: any) { alert(err.message || 'Failed to reject'); }
+      notify('Request rejected');
+    } catch (err: any) { notify(err.message || 'Failed to reject'); }
   };
 
   const handleAcceptTrial = async (id: string) => {
     try {
       await teacherDashService.acceptTrialRequest(id);
       setTrialRequests(prev => prev.filter(r => (r.id || r._id) !== id));
-      alert('Trial Request accepted!');
-    } catch (err: any) { alert(err.message || 'Failed to accept'); }
+      notify('Trial Request accepted!');
+    } catch (err: any) { notify(err.message || 'Failed to accept'); }
   };
 
   const handleRejectTrial = async (id: string) => {
     try {
       await teacherDashService.rejectTrialRequest(id);
       setTrialRequests(prev => prev.filter(r => (r.id || r._id) !== id));
-      alert('Trial Request rejected');
-    } catch (err: any) { alert(err.message || 'Failed to reject'); }
+      notify('Trial Request rejected');
+    } catch (err: any) { notify(err.message || 'Failed to reject'); }
   };
 
   const handleOpenEditClass = async (classId: string) => {
@@ -120,17 +132,19 @@ export default function TeacherDashboard() {
       setEditClassPhotos([]);
       setShowEditModal(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to fetch class details');
+      notify(err.message || 'Failed to fetch class details');
     }
   };
 
   const handleUpdateClass = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingClass) return;
+    if (String(editingClassData.price).trim() === '' || !Number.isFinite(Number(editingClassData.price)) || Number(editingClassData.price) < 0) { notify('Price must be a non-negative number'); return; }
     setSavingClass(true);
     try {
       const formData = new FormData();
       Object.entries(editingClassData).forEach(([key, value]) => {
-        if (key === 'photos') return;
+        if (!['title','description','category','price','priceUnit','schedule','time','ageGroup','skillLevel','maxStudents','trialAvailable','trialPrice','trialSlots','academyName'].includes(key)) return;
         if (value !== null && value !== undefined) {
           formData.append(key, (value as any).toString());
         }
@@ -139,12 +153,13 @@ export default function TeacherDashboard() {
         formData.append('photos', photo);
       });
       await classService.updateClass(editingClassData.id || editingClassData._id, formData);
-      alert('Class updated successfully!');
+      setDashData((prev: any) => ({ ...prev, activeClasses: prev.activeClasses.map((cls: any) => cls.classId === (editingClassData.id || editingClassData._id) ? { ...cls, title: editingClassData.title } : cls) }));
+      notify('Class updated successfully!');
       setShowEditModal(false);
       const res = await teacherDashService.getDashboard();
       setDashData(res.data);
     } catch (err: any) {
-      alert(err.message || 'Failed to update class');
+      notify(err.message || 'Failed to update class');
     } finally {
       setSavingClass(false);
     }
@@ -165,7 +180,7 @@ export default function TeacherDashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900">Teacher Dashboard</h1>
-          <p className="text-gray-500 mt-1">Welcome, {user?.name || 'Teacher'}</p>
+          <p className="text-gray-500 mt-1">{`Welcome, ${user?.name || 'Teacher'}`}</p>
         </div>
         <button onClick={() => setActiveTab('create')} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
           <Plus className="h-4 w-4" /> Post New Class
@@ -198,9 +213,9 @@ export default function TeacherDashboard() {
             <div className="space-y-4">
               {activeClasses.map((cls: any) => (
                 <div key={cls.classId} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-md transition-shadow cursor-pointer flex justify-between items-center" onClick={() => navigate(`/class-management/${cls.classId}`)}>
-                  <div><h3 className="text-lg font-bold text-gray-900">{cls.title}</h3><p className="text-sm text-gray-500">{cls.studentsCount} students • Next: {cls.nextSession}</p></div>
+                  <div><h3 className="text-lg font-bold text-gray-900">{cls.title}</h3><p className="text-sm text-gray-500">{countLabel(cls.studentsCount, "student", "students")}   • Next: {cls.nextSession}</p></div>
                   <div className="flex items-center gap-4">
-                    {cls.pendingPayments > 0 && <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">{cls.pendingPayments} pending payments</span>}
+                    {cls.pendingPayments > 0 && <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">{countLabel(cls.pendingPayments, "pending payment", "pending payments")}  </span>}
                     <button 
                       onClick={(e) => { 
                         e.stopPropagation(); 
@@ -219,7 +234,6 @@ export default function TeacherDashboard() {
 
           {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-8"> */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2"><Megaphone className="h-5 w-5 text-indigo-600" /> Recent Announcements</h2>
             {recentMessages.length > 0 && (
               <div><h2 className="text-xl font-bold text-gray-900 mb-4">Recent Messages</h2>
                 <div className="space-y-3">
@@ -384,7 +398,7 @@ export default function TeacherDashboard() {
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Description *</label><textarea required value={newClass.description} onChange={e => setNewClass({...newClass, description: e.target.value})} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Describe your class..." /></div>
             <div className="grid grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Category *</label><select value={newClass.category} onChange={e => setNewClass({...newClass, category: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3"><option value="sports">Sports</option><option value="dance">Dance</option><option value="music">Music</option><option value="academics">Academics</option><option value="fitness">Fitness</option><option value="coding">Coding</option><option value="arts">Arts</option><option value="languages">Languages</option></select></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (₹/month) *</label><input type="number" required min={0} value={newClass.price} onChange={e => setNewClass({...newClass, price: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (₹/month) *</label><input type="text" inputMode="decimal" required aria-label="Price" value={newClass.price} onChange={e => setNewClass({...newClass, price: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" />{(newClass.price.trim() === "" || !Number.isFinite(Number(newClass.price)) || Number(newClass.price) < 0) && <p role="alert" className="text-red-600">{Number(newClass.price) < 0 ? "Price cannot be negative" : "Enter a valid price"}</p>}<p className="text-xs text-gray-500">Enter 0 for a free class.</p></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Schedule</label><input type="text" value={newClass.schedule} onChange={e => setNewClass({...newClass, schedule: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" placeholder="e.g. Mon, Wed, Fri" /></div>
@@ -422,7 +436,7 @@ export default function TeacherDashboard() {
       {activeTab === 'profile' && (
         <div className="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Edit Profile</h2>
-          <form onSubmit={handleUpdateProfile} className="space-y-6">
+          <form onSubmit={handleUpdateProfile} className="space-y-6"><fieldset disabled={savingProfile} className="space-y-6">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" value={profileData.email} onChange={e => setProfileData({...profileData, email: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Phone</label><input type="tel" value={profileData.phone} onChange={e => setProfileData({...profileData, phone: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
@@ -431,7 +445,7 @@ export default function TeacherDashboard() {
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Certifications (comma separated)</label><input type="text" value={profileData.certifications} onChange={e => setProfileData({...profileData, certifications: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" placeholder="e.g. BCCI Level 1" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">About</label><textarea value={profileData.about} onChange={e => setProfileData({...profileData, about: e.target.value})} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3" placeholder="Tell students about yourself..." /></div>
             <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors">Save Profile</button>
-          </form>
+          </fieldset></form>
         </div>)}
 
       {showEditModal && editingClassData && (
@@ -446,7 +460,7 @@ export default function TeacherDashboard() {
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Description *</label><textarea required value={editingClassData.description} onChange={e => setEditingClassData({...editingClassData, description: e.target.value})} rows={4} className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Category *</label><select value={editingClassData.category} onChange={e => setEditingClassData({...editingClassData, category: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3"><option value="sports">Sports</option><option value="dance">Dance</option><option value="music">Music</option><option value="academics">Academics</option><option value="fitness">Fitness</option><option value="coding">Coding</option><option value="arts">Arts</option><option value="languages">Languages</option></select></div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (₹/month) *</label><input type="number" required min={0} value={editingClassData.price} onChange={e => setEditingClassData({...editingClassData, price: Number(e.target.value)})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Price (₹/month) *</label><input type="text" inputMode="decimal" required aria-label="Price" value={editingClassData.price} onChange={e => setEditingClassData({...editingClassData, price: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" />{(String(editingClassData.price).trim() === "" || !Number.isFinite(Number(editingClassData.price)) || Number(editingClassData.price) < 0) && <p role="alert" className="text-red-600">{Number(editingClassData.price) < 0 ? "Price cannot be negative" : "Enter a valid price"}</p>}</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium text-gray-700 mb-1">Schedule</label><input type="text" value={editingClassData.schedule || ''} onChange={e => setEditingClassData({...editingClassData, schedule: e.target.value})} className="w-full border border-gray-300 rounded-xl px-4 py-3" /></div>

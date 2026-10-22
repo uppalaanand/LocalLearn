@@ -8,6 +8,7 @@ const teacherProfileSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    featured: { type: Boolean, default: true },
     photo: {
       type: String,
       default: '',

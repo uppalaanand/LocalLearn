@@ -1,35 +1,20 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
 import { useAuth } from './AuthContext';
 
 type Role = 'student' | 'teacher';
 
 interface RoleContextType {
   role: Role;
-  setRole: (role: Role) => void;
 }
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRole] = useState<Role>('student');
-
-  // Try to sync with auth context if available
-  useEffect(() => {
-    try {
-      const user = localStorage.getItem('user');
-      if (user) {
-        const parsed = JSON.parse(user);
-        if (parsed.role === 'teacher' || parsed.role === 'student') {
-          setRole(parsed.role);
-        }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }, []);
+  const { user } = useAuth();
+  const role: Role = user?.role === 'teacher' ? 'teacher' : 'student';
 
   return (
-    <RoleContext.Provider value={{ role, setRole }}>
+    <RoleContext.Provider value={{ role }}>
       {children}
     </RoleContext.Provider>
   );

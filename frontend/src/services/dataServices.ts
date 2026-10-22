@@ -19,6 +19,8 @@ export const classService = {
 
   updateClass: (id: string, data: any) => api.put<any>(`/classes/${id}`, data),
 
+  deleteClass: (id: string) => api.delete<any>(`/classes/${id}`),
+
   enrollInClass: (id: string) => api.post<any>(`/classes/${id}/enroll`),
   
   joinRequest: (id: string) => api.post<any>(`/classes/${id}/join-request`),
@@ -76,6 +78,9 @@ export const classManagementService = {
   deleteSession: (classId: string, sessionId: string) => api.delete<any>(`/class-management/${classId}/schedule/${sessionId}`),
   getMessages: (id: string) => api.get<any>(`/class-management/${id}/chat`),
   sendMessage: (id: string, text: string) => api.post<any>(`/class-management/${id}/chat`, { text }),
+  setChatMuted: (id: string, muted: boolean) => api.put<any>(`/class-management/${id}/chat/settings`, { muted }),
+  deleteMessage: (id: string, messageId: string) => api.delete<any>(`/class-management/${id}/chat/${messageId}`),
+  sendReminders: (id: string) => api.post<any>(`/class-management/${id}/payments/reminders`),
   markAttendance: (id: string, records: any[]) => api.post<any>(`/class-management/${id}/attendance`, { records }),
   getAttendance: (id: string) => api.get<any>(`/class-management/${id}/attendance`),
   getPayments: (id: string) => api.get<any>(`/class-management/${id}/payments`),
@@ -97,6 +102,8 @@ export const favoriteService = {
 };
 
 export const messageService = {
+  sendDirectMessage: (id: string, text: string) => api.post<any>(`/messages/${id}`, { text }),
+  deleteDirectMessage: (id: string, messageId: string) => api.delete<any>(`/messages/${id}/${messageId}`),
   getConversations: () => api.get<any>('/messages/conversations'),
   getDirectMessages: (userId: string) => api.get<any>(`/messages/${userId}`),
   markAsRead: (userId: string) => api.post<any>(`/messages/${userId}/read`),

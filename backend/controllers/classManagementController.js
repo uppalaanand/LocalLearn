@@ -1,3 +1,5 @@
+import Notification from '../models/Notification.js';
+import { weekday, validateSession } from '../utils/schedule.js';
 import Class from '../models/Class.js';
 import Announcement from '../models/Announcement.js';
 import Schedule from '../models/Schedule.js';
@@ -16,38 +18,40 @@ import asyncHandler from '../utils/asyncHandler.js';
  * @access  Private
  */
 export const getClassManagement = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) {
     return next(ApiError.notFound('Class not found'));
   }
 
-  const announcements = await Announcement.find({ class: cls._id })
-    .sort({ createdAt: -1 })
-    .lean();
+  const [announcements, schedule, newestChat, enrollments] = await Promise.all([
+    Announcement.find({ class: cls._id }).sort({ createdAt: -1 }).lean(),
+    Schedule.find({ class: cls._id }).sort({ date: 1, startTime: 1 }).lean(),
+    Message.find({ class: cls._id }).sort({ createdAt: -1 }).limit(100).lean(),
+    Enrollment.find({ class: cls._id, status: 'active' }).populate('student', 'name email').lean(),
+  ]);
+  const chat = newestChat.reverse();
 
-  const schedule = await Schedule.find({ class: cls._id })
-    .sort({ createdAt: 1 })
-    .lean();
-
-  const chat = await Message.find({ class: cls._id })
-    .sort({ createdAt: 1 })
-    .limit(100)
-    .lean();
-
-  const enrollments = await Enrollment.find({ class: cls._id, status: 'active' })
-    .populate('student', 'name email')
-    .lean();
-
+  const attendanceCounts = await Attendance.aggregate([
+    { $match: { class: cls._id } },
+    { $group: { _id: '$student', total: { $sum: 1 }, present: { $sum: { $cond: [{ $in: ['$status', ['present', 'late']] }, 1, 0] } } } },
+  ]);
+  const attendanceByStudent = new Map(attendanceCounts.map(a => [String(a._id), a]));
   const students = enrollments.map((e) => ({
     id: e.student._id,
+    joinedAt: e.joinedAt,
+    attendedCount: attendanceByStudent.get(String(e.student._id))?.present || 0,
+    sessionCount: attendanceByStudent.get(String(e.student._id))?.total || 0,
     name: e.student.name,
     attendance: e.attendance,
-    paymentStatus: e.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+    paymentStatus: (req.classRecord?.price === 0) ? 'Free' : e.paymentStatus === 'paid' ? 'Paid' : e.paymentStatus === 'overdue' ? 'Overdue' : 'Pending',
   }));
 
   const response = ApiResponse.success({
     classId: cls._id,
     title: cls.title,
+    teacherId: cls.teacher,
+    chatMuted: cls.chatMuted,
+    price: cls.price,
     announcements: announcements.map((a) => ({
       id: a._id,
       text: a.text,
@@ -57,7 +61,7 @@ export const getClassManagement = asyncHandler(async (req, res, next) => {
     schedule: schedule.map((s) => ({
       id: s._id,
       date: s.date,
-      day: s.day,
+      day: weekday(s.date),
       time: s.time,
       startTime: s.startTime,
       endTime: s.endTime,
@@ -66,6 +70,7 @@ export const getClassManagement = asyncHandler(async (req, res, next) => {
     chat: chat.map((m) => ({
       id: m._id,
       sender: m.senderName,
+      senderId: m.sender,
       text: m.text,
       time: m.time,
       isTeacher: m.isTeacher,
@@ -82,7 +87,7 @@ export const getClassManagement = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const createAnnouncement = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) return next(ApiError.notFound('Class not found'));
 
   if (cls.teacher.toString() !== req.user._id.toString()) {
@@ -112,7 +117,7 @@ export const createAnnouncement = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const updateAnnouncement = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) return next(ApiError.notFound('Class not found'));
 
   if (cls.teacher.toString() !== req.user._id.toString()) {
@@ -141,7 +146,7 @@ export const updateAnnouncement = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const deleteAnnouncement = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) return next(ApiError.notFound('Class not found'));
 
   if (cls.teacher.toString() !== req.user._id.toString()) {
@@ -163,17 +168,19 @@ export const deleteAnnouncement = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const addScheduleSession = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) return next(ApiError.notFound('Class not found'));
 
+  const error = validateSession(req.body);
+  if (error) return next(ApiError.badRequest(error));
   const session = await Schedule.create({
     class: cls._id,
     date: req.body.date,
-    day: req.body.day,
+    day: weekday(req.body.date),
     time: req.body.time,
     startTime: req.body.startTime,
     endTime: req.body.endTime,
-    topic: req.body.topic,
+    topic: req.body.topic?.trim() || 'Class Session',
   });
 
   const response = ApiResponse.created({
@@ -195,9 +202,12 @@ export const addScheduleSession = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const updateScheduleSession = asyncHandler(async (req, res, next) => {
-  const session = await Schedule.findByIdAndUpdate(
-    req.params.sessionId,
-    req.body,
+  const error = validateSession(req.body);
+  if (error) return next(ApiError.badRequest(error));
+  const { date, startTime, endTime, topic } = req.body;
+  const session = await Schedule.findOneAndUpdate(
+    { _id: req.params.sessionId, class: req.params.id },
+    { date, startTime, endTime, topic: topic?.trim() || 'Class Session', day: weekday(date), time: `${startTime} - ${endTime}` },
     { new: true, runValidators: true }
   );
 
@@ -213,7 +223,7 @@ export const updateScheduleSession = asyncHandler(async (req, res, next) => {
  * @access  Private (Teacher only)
  */
 export const deleteScheduleSession = asyncHandler(async (req, res, next) => {
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
   if (!cls) return next(ApiError.notFound('Class not found'));
 
   if (cls.teacher.toString() !== req.user._id.toString()) {
@@ -234,7 +244,9 @@ export const deleteScheduleSession = asyncHandler(async (req, res, next) => {
  * @route   POST /api/class-management/:id/chat
  * @access  Private
  */
-export const sendMessage = asyncHandler(async (req, res) => {
+export const sendMessage = asyncHandler(async (req, res, next) => {
+  if (req.classRecord.chatMuted && String(req.classRecord.teacher) !== String(req.user._id)) return next(ApiError.forbidden('The teacher has muted this chat'));
+  if (typeof req.body.text !== 'string' || !req.body.text.trim()) return next(ApiError.badRequest('Message text is required'));
   const message = await Message.create({
     class: req.params.id,
     sender: req.user._id,
@@ -246,6 +258,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
   const response = ApiResponse.created({
     id: message._id,
     sender: message.senderName,
+    senderId: message.sender,
     text: message.text,
     time: message.time,
     isTeacher: message.isTeacher,
@@ -261,14 +274,15 @@ export const sendMessage = asyncHandler(async (req, res) => {
  */
 export const getMessages = asyncHandler(async (req, res) => {
   const messages = await Message.find({ class: req.params.id })
-    .sort({ createdAt: 1 })
-    .limit(200)
+    .sort({ createdAt: -1 })
+    .limit(100)
     .lean();
 
   const response = ApiResponse.success(
-    messages.map((m) => ({
+    messages.reverse().map((m) => ({
       id: m._id,
       sender: m.senderName,
+      senderId: m.sender,
       text: m.text,
       time: m.time,
       isTeacher: m.isTeacher,
@@ -283,18 +297,22 @@ export const getMessages = asyncHandler(async (req, res) => {
  * @route   POST /api/class-management/:id/attendance
  * @access  Private (Teacher only)
  */
-export const markAttendance = asyncHandler(async (req, res) => {
-  const { records } = req.body; // [{ studentId, status }]
+export const markAttendance = asyncHandler(async (req, res, next) => {
+  const { records } = req.body;
+  if (!Array.isArray(records) || !records.length) return next(ApiError.badRequest('No students to mark attendance for'));
+  const members = await Enrollment.find({ class: req.params.id, status: 'active' }).distinct('student');
+  const memberIds = new Set(members.map(String));
+  if (records.some(r => !memberIds.has(String(r.studentId)) || !['present', 'absent', 'late'].includes(r.status))) return next(ApiError.badRequest('Attendance must contain enrolled students and a valid status'));
+  if (new Set(records.map(r => String(r.studentId))).size !== records.length) return next(ApiError.badRequest('Duplicate students in attendance'));
+  const date = new Date(); date.setUTCHours(0, 0, 0, 0);
 
   const attendanceRecords = await Promise.all(
     records.map(async (record) => {
-      return Attendance.create({
-        class: req.params.id,
-        student: record.studentId,
-        status: record.status,
-        markedBy: req.user._id,
-        date: new Date(),
-      });
+      return Attendance.findOneAndUpdate(
+        { class: req.params.id, student: record.studentId, date },
+        { status: record.status, markedBy: req.user._id },
+        { new: true, upsert: true, runValidators: true }
+      );
     })
   );
 
@@ -346,7 +364,7 @@ export const getPayments = asyncHandler(async (req, res) => {
     .populate('student', 'name')
     .lean();
 
-  const cls = await Class.findById(req.params.id);
+  const cls = req.classRecord || await Class.findById(req.params.id);
 
   const payments = enrollments.map((e) => ({
     studentId: e.student._id,
@@ -383,12 +401,46 @@ export const getMembers = asyncHandler(async (req, res) => {
 
   const members = enrollments.map((e) => ({
     id: e.student._id,
+    joinedAt: e.joinedAt,
     name: e.student.name,
     attendance: e.attendance,
-    paymentStatus: e.paymentStatus === 'paid' ? 'Paid' : 'Pending',
+    paymentStatus: (req.classRecord?.price === 0) ? 'Free' : e.paymentStatus === 'paid' ? 'Paid' : e.paymentStatus === 'overdue' ? 'Overdue' : 'Pending',
     joinedAt: e.joinedAt,
   }));
 
   const response = ApiResponse.success(members);
   res.status(response.statusCode).json(response);
+});
+
+export const deleteMessage = asyncHandler(async (req, res, next) => {
+  const message = await Message.findOne({ _id: req.params.messageId, class: req.params.id });
+  if (!message) return next(ApiError.notFound('Message not found'));
+  if (String(message.sender) !== String(req.user._id) && String(req.classRecord.teacher) !== String(req.user._id)) return next(ApiError.forbidden('You can only delete your own messages'));
+  await message.deleteOne();
+  req.app?.get('io')?.to(`class_${req.params.id}`).emit('messageDeleted', { id: req.params.messageId });
+  res.json(ApiResponse.success(null, 'Message deleted'));
+});
+export const sendReminders = asyncHandler(async (req, res) => {
+  const cls = req.classRecord;
+  const pending = cls.price === 0 ? [] : await Enrollment.find({ class: cls._id, status: 'active', paymentStatus: { $in: ['pending', 'overdue'] } });
+  await Notification.insertMany(pending.map(e => ({ user: e.student, classId: cls._id, type: 'payment', title: 'Payment reminder', message: `Payment for ${cls.title} is due. Please contact your teacher.` })));
+  res.json(ApiResponse.success({ count: pending.length }, pending.length ? `Reminders sent to ${pending.length} students` : 'No pending payments, nothing to send'));
+});
+export const inviteStudent = asyncHandler(async (req, res, next) => {
+  const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+  const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return next(ApiError.badRequest('Student name and a valid email are required'));
+  const student = await User.findOne({ email, role: 'student' });
+  if (!student) return next(ApiError.badRequest('No student account has this email. Ask the student to register before sending an in-app invitation.'));
+  if (await Enrollment.exists({ class: req.params.id, student: student._id, status: 'active' })) return next(ApiError.conflict('Student is already a member'));
+  await Notification.create({ user: student._id, classId: req.params.id, type: 'system', title: 'Class invitation', message: `${req.user.name} invited you to ${req.classRecord.title}. Open the class to request to join.` });
+  res.status(201).json(ApiResponse.created(null, 'In-app invitation sent'));
+});
+
+export const setChatMuted = asyncHandler(async (req, res, next) => {
+  if (String(req.classRecord.teacher) !== String(req.user._id)) return next(ApiError.forbidden('Only the owning teacher can mute chat'));
+  if (typeof req.body.muted !== 'boolean') return next(ApiError.badRequest('Muted must be a boolean'));
+  req.classRecord.chatMuted = req.body.muted;
+  await req.classRecord.save();
+  res.json(ApiResponse.success({ muted: req.body.muted }, req.body.muted ? 'Chat muted for students' : 'Chat unmuted'));
 });

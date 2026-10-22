@@ -99,14 +99,7 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-            <p className="text-xs font-bold text-indigo-700 mb-2">Demo Accounts:</p>
-            <div className="space-y-1 text-xs text-indigo-600">
-              <p><span className="font-medium">Student:</span> student@locallearn.com / password123</p>
-              <p><span className="font-medium">Teacher:</span> rahul@locallearn.com / password123</p>
-            </div>
-          </div>
+
         </div>
 
         {/* Register Link */}

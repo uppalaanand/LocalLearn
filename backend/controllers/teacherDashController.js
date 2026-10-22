@@ -1,3 +1,4 @@
+import { weekday } from '../utils/schedule.js';
 import Class from '../models/Class.js';
 import Enrollment from '../models/Enrollment.js';
 import Payment from '../models/Payment.js';
@@ -18,24 +19,17 @@ export const getTeacherDashboard = asyncHandler(async (req, res) => {
   // Get active classes
   const classes = await Class.find({ teacher: teacherId, isActive: true }).lean();
 
-  const activeClasses = await Promise.all(
-    classes.map(async (cls) => {
-      const enrollmentCount = await Enrollment.countDocuments({ class: cls._id, status: 'active' });
-      const pendingPayments = await Enrollment.countDocuments({
-        class: cls._id,
-        status: 'active',
-        paymentStatus: 'pending',
-      });
-
-      return {
-        classId: cls._id,
-        title: cls.title,
-        studentsCount: enrollmentCount || cls.studentsCount,
-        nextSession: 'Today, ' + (cls.time?.split('-')[0]?.trim() || '5:00 PM'),
-        pendingPayments,
-      };
-    })
-  );
+  const enrollmentStats = await Enrollment.aggregate([
+    { $match: { class: { $in: classes.map(c => c._id) }, status: 'active' } },
+    { $group: { _id: '$class', count: { $sum: 1 }, pending: { $sum: { $cond: [{ $in: ['$paymentStatus', ['pending', 'overdue']] }, 1, 0] } } } },
+  ]);
+  const countsByClass = new Map(enrollmentStats.map(e => [String(e._id), e]));
+  const activeClasses = classes.map(cls => ({
+    classId: cls._id, title: cls.title,
+    studentsCount: countsByClass.get(String(cls._id))?.count || 0,
+    nextSession: cls.time || 'No session scheduled',
+    pendingPayments: cls.price === 0 ? 0 : countsByClass.get(String(cls._id))?.pending || 0,
+  }));
 
   // Get recent messages across all classes
   const classIds = classes.map((c) => c._id);
@@ -74,13 +68,13 @@ export const getTeacherDashboard = asyncHandler(async (req, res) => {
 
   const combinedSchedule = await Promise.all(
     schedulesRaw.map(async (session) => {
-      const cls = await Class.findById(session.class);
+      const cls = classes.find(c => String(c._id) === String(session.class));
       return {
         id: session._id,
         classId: session.class,
         title: cls?.title || '',
         date: session.date,
-        day: session.day,
+        day: weekday(session.date),
         time: session.time,
         startTime: session.startTime,
         endTime: session.endTime,

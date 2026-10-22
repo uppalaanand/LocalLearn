@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const classSchema = new mongoose.Schema(
   {
+    chatMuted: { type: Boolean, default: false },
     title: {
       type: String,
       required: [true, 'Class title is required'],

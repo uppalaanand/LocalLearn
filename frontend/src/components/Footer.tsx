@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Linkedin, Github, Instagram, Twitter, Mail, Phone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { socialLinks } from '../config/social';
 import { useRole } from '../context/RoleContext';
 
 export default function Footer() {
@@ -19,7 +20,7 @@ export default function Footer() {
               <MapPin className="h-7 w-7" />
               LocalLearn
             </Link>
-            <p className="text-gray-500 text-sm leading-relaxed">
+            <p className="text-gray-500 text-sm leading-relaxed whitespace-normal break-words">
               Connecting students with the best local teachers. Empowering communities through accessible education.
             </p>
             <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 relative">
@@ -40,12 +41,12 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm font-medium flex items-center gap-2">
+                <Link to="/search" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm font-medium flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-gray-300"></span> Explore Classes
                 </Link>
               </li>
               <li>
-                <Link to="/" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm font-medium flex items-center gap-2">
+                <Link to="/teachers" className="text-gray-500 hover:text-indigo-600 transition-colors text-sm font-medium flex items-center gap-2">
                   <span className="h-1 w-1 rounded-full bg-gray-300"></span> Browse Teachers
                 </Link>
               </li>
@@ -91,32 +92,15 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Socials */}
-          <div>
-            <h3 className="text-gray-900 font-bold text-lg mb-6">Follow Us</h3>
-            <p className="text-gray-500 text-sm mb-4">Stay updated with our latest news and features.</p>
-            <div className="flex items-center gap-3">
-              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-indigo-600 hover:text-white transition-all transform hover:-translate-y-1">
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-indigo-600 hover:text-white transition-all transform hover:-translate-y-1">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-pink-600 hover:text-white transition-all transform hover:-translate-y-1">
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-900 hover:text-white transition-all transform hover:-translate-y-1">
-                <Github className="h-5 w-5" />
-              </a>
-            </div>
-          </div>
+          {socialLinks.length > 0 && <div><h3 className="font-bold mb-6">Follow Us</h3><div className="flex gap-3">{socialLinks.map(link => <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="text-indigo-600">{link.name}</a>)}</div></div>}
+
 
         </div>
 
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-gray-400 text-sm font-medium">
-            &copy; {new Date().getFullYear()} Local Learn. All rights reserved.
+            {`© ${new Date().getFullYear()} Local Learn. All rights reserved.`}
           </p>
           <p className="text-gray-400 text-sm font-medium flex items-center gap-1">
             Built with <span className="text-red-500">❤️</span> for learners and educators.

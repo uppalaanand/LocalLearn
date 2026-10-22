@@ -4,8 +4,10 @@
  */
 
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import Feedback from './components/Feedback';
 import Layout from './components/Layout';
+import Teachers from './pages/Teachers';
 import Home from './pages/Home';
 import SearchResults from './pages/SearchResults';
 import ClassDetail from './pages/ClassDetail';
@@ -35,11 +37,17 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   return <>{children}</>;
 }
 
+function DashboardRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={user ? (user.role === 'teacher' ? '/teacher' : '/student') : '/login'} replace />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <RoleProvider>
         <Router>
+          <Feedback />
           <Routes>
             {/* Auth routes (no layout) */}
             <Route path="/login" element={<Login />} />
@@ -48,6 +56,9 @@ export default function App() {
             {/* App routes (with layout) */}
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />
+              <Route path="dashboard" element={<DashboardRedirect />} />
+              <Route path="*" element={<div className="py-20 text-center"><h1 className="text-3xl font-bold">Page not found</h1><p className="my-4">This page does not exist.</p><Link to="/" className="mr-6 text-indigo-600">Home</Link><Link to="/dashboard" className="text-indigo-600">My dashboard</Link></div>} />
+              <Route path="teachers" element={<Teachers />} />
               <Route path="search" element={<SearchResults />} />
               <Route path="class/:id" element={<ClassDetail />} />
               <Route path="teacher/:id" element={<TeacherProfile />} />

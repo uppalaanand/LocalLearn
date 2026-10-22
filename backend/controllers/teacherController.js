@@ -17,8 +17,9 @@ export const getTeachers = asyncHandler(async (req, res) => {
     return res.status(200).json(ApiResponse.success(cached, 'From cache'));
   }
 
-  const profiles = await TeacherProfile.find()
-    .populate('user', 'name email avatar location')
+  const activeTeacherIds = await Class.distinct('teacher', { isActive: true });
+  const profiles = await TeacherProfile.find({ user: { $in: activeTeacherIds }, isVerified: true, featured: { $ne: false }, 'skills.0': { $exists: true }, about: { $ne: '' } })
+    .populate('user', 'name avatar location')
     .sort({ rating: -1 })
     .lean();
 
@@ -66,6 +67,7 @@ export const getTeacherById = asyncHandler(async (req, res, next) => {
 
   const teacher = {
     id: user._id,
+    createdAt: user.createdAt,
     name: user.name,
     photo: profile.photo || user.avatar || '',
     experience: profile.experience,
@@ -95,27 +97,28 @@ export const updateTeacherProfile = asyncHandler(async (req, res, next) => {
   const { name, email, phone, location: locationAddress, experience, skills, certifications, about } = req.body;
 
   // Update user fields
-  if (name || email || phone) {
+  if (name !== undefined || email !== undefined || phone !== undefined || locationAddress !== undefined) {
     const updateFields = {};
     if (name) updateFields.name = name;
     if (email) updateFields.email = email;
-    if (phone) updateFields.phone = phone;
-    if (locationAddress) updateFields['location.address'] = locationAddress;
-    await User.findByIdAndUpdate(req.user._id, updateFields);
+    if (phone !== undefined) updateFields.phone = phone;
+    if (locationAddress !== undefined) updateFields['location.address'] = locationAddress;
+    await User.findByIdAndUpdate(req.user._id, updateFields, { runValidators: true });
   }
 
   // Update teacher profile
   const profileUpdate = {};
-  if (experience) profileUpdate.experience = experience;
+  if (typeof req.body.featured === 'boolean') profileUpdate.featured = req.body.featured;
+  if (experience !== undefined) profileUpdate.experience = experience;
   if (skills) profileUpdate.skills = skills;
   if (certifications) profileUpdate.certifications = certifications;
-  if (about) profileUpdate.about = about;
-  if (locationAddress) profileUpdate.locationName = locationAddress;
+  if (about !== undefined) profileUpdate.about = about;
+  if (locationAddress !== undefined) profileUpdate.locationName = locationAddress;
 
   const profile = await TeacherProfile.findOneAndUpdate(
     { user: req.user._id },
     profileUpdate,
-    { new: true, upsert: true }
+    { new: true, upsert: true, runValidators: true }
   );
 
   cacheManager.delByPrefix('top_teachers');
